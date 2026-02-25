@@ -1,0 +1,41 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: stream_up_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: stream_up
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stream_up_api
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/stream_up
+      JWT_SECRET: ${JWT_SECRET:-ReiXYAb7lusPdk5Fey9SaS6Z}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-admin@example.com}
+      VIDEO_CACHE_DIR: /tmp/streamup-video-cache
+      UPLOAD_MAX_MB: 1024
+      UPLOAD_SOFT_MAX_MB: 500
+      UPLOAD_MAX_DURATION_SEC: 900
+      RATE_LIMIT_MAX: 2000
+    depends_on:
+      - postgres
+    volumes:
+      - video_cache:/tmp/streamup-video-cache
+
+volumes:
+  postgres_data:
+  video_cache:
