@@ -18,7 +18,17 @@ export async function GET(
   });
 
   const headers = new Headers();
-  const passthrough = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
+  const passthrough = [
+    'content-type',
+    'content-length',
+    'content-range',
+    'accept-ranges',
+    'cache-control',
+    'content-disposition',
+    'etag',
+    'last-modified',
+    'vary',
+  ];
   passthrough.forEach((key) => {
     const value = res.headers.get(key);
     if (value) headers.set(key, value);

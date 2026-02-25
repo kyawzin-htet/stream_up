@@ -16,6 +16,8 @@ function formatSeconds(seconds: number) {
 
 export function AdminUploadForm({ categories }: { categories: Category[] }) {
   const [status, setStatus] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState(0);
   const [fileInfo, setFileInfo] = useState<{ sizeMb: number; durationSec: number } | null>(null);
   const [allowTranscode, setAllowTranscode] = useState(false);
   const [trimStart, setTrimStart] = useState(0);
@@ -23,23 +25,64 @@ export function AdminUploadForm({ categories }: { categories: Category[] }) {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus('Uploading to Telegram...');
+    if (isUploading) return;
 
     const form = event.currentTarget;
+    const selectedFile = (form.elements.namedItem('file') as HTMLInputElement | null)?.files?.[0];
+    if (!selectedFile) {
+      setStatus('Please choose a video file');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadPercent(0);
+    setStatus('Uploading...');
     const formData = new FormData(form);
 
-    const res = await fetch('/api/admin/videos', {
-      method: 'POST',
-      body: formData,
-    });
+    let response: { status: number; body: string };
+    try {
+      response = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/admin/videos');
 
-    if (!res.ok) {
-      const message = await res.text();
-      setStatus(message || 'Upload failed');
+        xhr.upload.onprogress = (progressEvent) => {
+          if (!progressEvent.lengthComputable) return;
+          const percent = Math.min(100, Math.round((progressEvent.loaded / progressEvent.total) * 100));
+          setUploadPercent(percent);
+          setStatus(percent >= 100 ? 'Upload sent. Processing video...' : `Uploading... ${percent}%`);
+        };
+
+        xhr.onload = () => {
+          resolve({
+            status: xhr.status,
+            body: xhr.responseText || '',
+          });
+        };
+
+        xhr.onerror = () => reject(new Error('Network error while uploading'));
+        xhr.send(formData);
+      });
+    } catch (error: any) {
+      setStatus(error?.message || 'Upload failed');
+      setIsUploading(false);
+      return;
+    }
+
+    if (response.status < 200 || response.status >= 300) {
+      try {
+        const parsed = JSON.parse(response.body) as { message?: string | string[]; error?: string };
+        const message = Array.isArray(parsed.message) ? parsed.message.join(', ') : parsed.message;
+        setStatus(message || parsed.error || 'Upload failed');
+      } catch {
+        setStatus(response.body || 'Upload failed');
+      }
+      setIsUploading(false);
       return;
     }
 
     setStatus('Upload complete');
+    setIsUploading(false);
+    setUploadPercent(0);
     form.reset();
     setFileInfo(null);
     setAllowTranscode(false);
@@ -70,7 +113,7 @@ export function AdminUploadForm({ categories }: { categories: Category[] }) {
 
   const isTooLarge = fileInfo ? fileInfo.sizeMb > MAX_UPLOAD_MB : false;
   const isTooLong = fileInfo ? fileInfo.durationSec > MAX_DURATION_SEC : false;
-  const canSubmit = !isTooLarge || allowTranscode;
+  const canSubmit = !isUploading && (!isTooLarge || allowTranscode);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -174,11 +217,25 @@ export function AdminUploadForm({ categories }: { categories: Category[] }) {
           </label>
         </div>
       )}
+      {isUploading && (
+        <div className="rounded-2xl border border-sky-400/30 bg-sky-500/10 p-4">
+          <div className="flex items-center justify-between text-xs font-semibold uppercase text-sky-200">
+            <span>Upload progress</span>
+            <span>{uploadPercent}%</span>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-900/60">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-200"
+              style={{ width: `${uploadPercent}%` }}
+            />
+          </div>
+        </div>
+      )}
       <button
         disabled={!canSubmit}
         className="rounded-full bg-ink px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
       >
-        Upload video
+        {isUploading ? 'Uploading…' : 'Upload video'}
       </button>
       {status && <p className="text-sm text-slate-600">{status}</p>}
     </form>

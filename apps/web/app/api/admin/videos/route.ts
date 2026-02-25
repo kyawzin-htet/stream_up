@@ -27,12 +27,21 @@ export async function POST(req: Request) {
   const token = cookies().get('access_token')?.value;
   if (!token) return new NextResponse('Unauthorized', { status: 401 });
 
-  const formData = await req.formData();
-  const res = await fetch(`${API_URL}/videos`, {
+  const contentType = req.headers.get('content-type') || '';
+  const contentLength = req.headers.get('content-length') || '';
+  const init: RequestInit & { duplex?: 'half' } = {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
-    body: formData,
-  });
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(contentType ? { 'Content-Type': contentType } : {}),
+      ...(contentLength ? { 'Content-Length': contentLength } : {}),
+    },
+    body: req.body,
+    // Needed by Node fetch when forwarding request body streams.
+    duplex: 'half',
+  };
+
+  const res = await fetch(`${API_URL}/videos`, init);
 
   if (!res.ok) {
     return new NextResponse(await res.text(), { status: res.status });

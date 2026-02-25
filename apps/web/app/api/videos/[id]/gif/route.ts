@@ -5,24 +5,21 @@ import { API_URL } from '../../../../../lib/api';
 export const runtime = 'nodejs';
 
 export async function GET(
-  req: Request,
+  _req: Request,
   { params }: { params: { id: string } },
 ) {
   const token = cookies().get('access_token')?.value;
-  const range = req.headers.get('range');
-  const res = await fetch(`${API_URL}/videos/${params.id}/preview`, {
+  const res = await fetch(`${API_URL}/videos/${params.id}/gif`, {
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(range ? { Range: range } : {}),
     },
+    cache: 'no-store',
   });
 
   const headers = new Headers();
   const passthrough = [
     'content-type',
     'content-length',
-    'content-range',
-    'accept-ranges',
     'cache-control',
     'content-disposition',
     'etag',

@@ -61,7 +61,7 @@ export function BrowseVideoGrid({
       pageSize: '10',
     });
 
-    const res = await fetch(`/api/videos?${params.toString()}`, { cache: 'no-store' });
+    const res = await fetch(`/api/videos?${params.toString()}`);
     if (!res.ok) {
       const message = await res.text();
       setError(message || 'Failed to load more videos');
@@ -76,15 +76,17 @@ export function BrowseVideoGrid({
     setLoading(false);
   }
 
+  const visibleItems = items;
+
   return (
     <div className="space-y-4">
-      {items.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <div className="rounded-2xl border border-slate-800/70 bg-slate-900/40 p-6 text-sm text-slate-400">
           No videos found.
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {items.map((video) => (
+          {visibleItems.map((video) => (
             <VideoPreviewCard
               key={video.id}
               video={video}
@@ -99,7 +101,7 @@ export function BrowseVideoGrid({
       <div className="flex flex-col items-center gap-2 py-2 text-xs text-slate-500">
         {loading && <span>Loading more…</span>}
         {error && <span className="text-red-400">{error}</span>}
-        {page >= totalPages && items.length > 0 && <span>End of results</span>}
+        {page >= totalPages && visibleItems.length > 0 && <span>End of results</span>}
       </div>
 
       <div ref={sentinelRef} aria-hidden="true" />

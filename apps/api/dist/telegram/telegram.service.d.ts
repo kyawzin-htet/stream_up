@@ -13,6 +13,7 @@ export declare class TelegramService {
     private apiUrl;
     sendVideoToChannel(file: Express.Multer.File, caption: string): Promise<any>;
     sendPhotoToChannel(file: Express.Multer.File, caption: string): Promise<any>;
+    sendAnimationToChannel(file: Express.Multer.File, caption: string): Promise<any>;
     getFile(fileId: string): Promise<{
         file_path: string;
         file_size?: number;

@@ -40,6 +40,8 @@ const CACHE_INFLIGHT = new Map();
 const SOFT_MAX_MB = Number(process.env.UPLOAD_SOFT_MAX_MB || 500);
 const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 1024);
 const MAX_DURATION_SEC = Number(process.env.UPLOAD_MAX_DURATION_SEC || 15 * 60);
+const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_SEC || 6);
+const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
 let VideosController = VideosController_1 = class VideosController {
     constructor(videos, users, telegram, jwt) {
@@ -171,6 +173,123 @@ let VideosController = VideosController_1 = class VideosController {
         args.push(outputPath);
         await execFileAsync('ffmpeg', args);
     }
+    async createGif({ inputPath, outputPath, start, duration, }) {
+        const args = [
+            '-y',
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-ss',
+            String(start),
+            '-i',
+            inputPath,
+            '-t',
+            String(duration),
+            '-vf',
+            "fps=12,scale='min(480,iw)':-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5",
+            '-loop',
+            '0',
+            outputPath,
+        ];
+        await execFileAsync('ffmpeg', args);
+    }
+    async ensureViewerCanAccess(res, isPremium) {
+        if (!isPremium)
+            return true;
+        const authHeader = res.req.headers.authorization || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+        if (!token) {
+            res.status(401).json({ message: 'Authentication required' });
+            return false;
+        }
+        try {
+            const payload = await this.jwt.verifyAsync(token);
+            if (!payload?.sub) {
+                res.status(401).json({ message: 'Invalid token' });
+                return false;
+            }
+            const viewer = await this.users.findById(payload.sub);
+            const active = viewer.membershipType === 'PREMIUM' &&
+                (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
+            if (!active) {
+                res.status(403).json({ message: 'Premium membership required' });
+                return false;
+            }
+            return true;
+        }
+        catch {
+            res.status(401).json({ message: 'Invalid token' });
+            return false;
+        }
+    }
+    async proxyTelegramFile({ res, fileId, telegramFilePath, defaultContentType, errorMessage, allowRange = false, }) {
+        const filePath = telegramFilePath || (await this.telegram.getFile(fileId)).file_path;
+        const range = allowRange ? (res.req.headers.range || undefined) : undefined;
+        const fileResponse = await this.telegram.fetchFileStream(filePath, range);
+        if (!fileResponse.ok || !fileResponse.body) {
+            res.status(502).json({ message: errorMessage });
+            return;
+        }
+        const headers = {
+            'Content-Type': fileResponse.headers.get('content-type') || defaultContentType,
+            'Content-Length': fileResponse.headers.get('content-length') || '',
+        };
+        const contentRange = fileResponse.headers.get('content-range');
+        if (contentRange)
+            headers['Content-Range'] = contentRange;
+        const acceptRanges = fileResponse.headers.get('accept-ranges');
+        if (acceptRanges)
+            headers['Accept-Ranges'] = acceptRanges;
+        res.status(fileResponse.status);
+        Object.entries(headers).forEach(([key, value]) => {
+            if (value)
+                res.setHeader(key, value);
+        });
+        const bodyStream = fileResponse.body;
+        const cancelUpstream = () => {
+            if (!bodyStream)
+                return;
+            try {
+                if ('locked' in bodyStream && bodyStream.locked)
+                    return;
+                const result = bodyStream.cancel();
+                if (result && typeof result.catch === 'function') {
+                    result.catch(() => { });
+                }
+            }
+            catch { }
+        };
+        const stream = stream_1.Readable.fromWeb(fileResponse.body);
+        stream.on('error', (error) => {
+            this.logger.warn(`${errorMessage} (${fileId}): ${String(error)}`);
+            if (!res.headersSent)
+                res.status(499);
+            res.end();
+        });
+        res.on('close', () => {
+            cancelUpstream();
+            stream.destroy();
+        });
+        stream.pipe(res);
+    }
+    setStreamCacheHeaders(res, isPremium) {
+        res.setHeader('Cache-Control', isPremium
+            ? 'private, max-age=600, stale-while-revalidate=3600'
+            : 'public, max-age=600, stale-while-revalidate=3600');
+        res.setHeader('Vary', 'Authorization, Range');
+    }
+    toClientVideo(video) {
+        return {
+            ...video,
+            hasGif: Boolean(video.telegramGifFileId),
+            telegramFileId: undefined,
+            telegramMessageId: undefined,
+            telegramChannelId: undefined,
+            telegramGifFileId: undefined,
+            telegramGifMessageId: undefined,
+            telegramGifChannelId: undefined,
+        };
+    }
     async list(query, category, page = '1', pageSize = '12') {
         const data = await this.videos.listVideos({
             query,
@@ -180,40 +299,38 @@ let VideosController = VideosController_1 = class VideosController {
         });
         return {
             ...data,
-            items: data.items.map((video) => ({
-                ...video,
-                telegramFileId: undefined,
-                telegramMessageId: undefined,
-                telegramChannelId: undefined,
-            })),
+            items: data.items.map((video) => this.toClientVideo(video)),
         };
     }
     async adminList(status = 'active', query, premium, page = '1', pageSize = '20') {
         const normalizedPage = Math.max(1, Number(page) || 1);
         const normalizedSize = Math.min(50, Math.max(1, Number(pageSize) || 20));
         if (status === 'trashed') {
-            return this.videos.listDeletedVideos({
+            const data = await this.videos.listDeletedVideos({
                 page: normalizedPage,
                 pageSize: normalizedSize,
                 query,
             });
+            return {
+                ...data,
+                items: data.items.map((video) => this.toClientVideo(video)),
+            };
         }
         const premiumFilter = premium === 'true' ? true : premium === 'false' ? false : null;
-        return this.videos.listVideos({
+        const data = await this.videos.listVideos({
             query,
             premium: premiumFilter,
             page: normalizedPage,
             pageSize: normalizedSize,
         });
+        return {
+            ...data,
+            items: data.items.map((video) => this.toClientVideo(video)),
+        };
     }
     async get(id) {
         const video = await this.videos.getVideo(id);
-        return {
-            ...video,
-            telegramFileId: undefined,
-            telegramMessageId: undefined,
-            telegramChannelId: undefined,
-        };
+        return this.toClientVideo(video);
     }
     async upload(file, dto, user) {
         if (!file)
@@ -224,6 +341,8 @@ let VideosController = VideosController_1 = class VideosController {
         const allowTranscode = dto.allowTranscode === 'true';
         const trimStart = Number(dto.trimStart || 0);
         const trimEnd = dto.trimEnd ? Number(dto.trimEnd) : undefined;
+        const gifStartInput = dto.gifStart ? Number(dto.gifStart) : 0;
+        const gifEndInput = dto.gifEnd ? Number(dto.gifEnd) : undefined;
         const fileSizeMb = file.size / (1024 * 1024);
         const needsTranscode = fileSizeMb > SOFT_MAX_MB;
         if (needsTranscode && !allowTranscode) {
@@ -232,7 +351,9 @@ let VideosController = VideosController_1 = class VideosController {
         const tmpDir = await fs_2.promises.mkdtemp(path.join(os.tmpdir(), 'streamup-upload-'));
         const inputPath = path.join(tmpDir, file.originalname.replace(/\s+/g, '_'));
         const outputPath = path.join(tmpDir, 'output.mp4');
+        const gifPath = path.join(tmpDir, 'preview.gif');
         let processedFile = file;
+        let gifFile = null;
         try {
             await fs_2.promises.writeFile(inputPath, file.buffer);
             const durationSec = await this.getDurationSeconds(inputPath);
@@ -250,6 +371,8 @@ let VideosController = VideosController_1 = class VideosController {
                 end = Math.min(end, durationSec);
             }
             const needsTrim = durationSec > MAX_DURATION_SEC || (Number.isFinite(trimEnd || NaN) && end > start);
+            let sourceForGifPath = inputPath;
+            let sourceDurationSec = durationSec;
             if (needsTrim || needsTranscode) {
                 const clipDuration = Math.max(1, end - start);
                 await this.processVideo({
@@ -267,7 +390,30 @@ let VideosController = VideosController_1 = class VideosController {
                     mimetype: 'video/mp4',
                     originalname: file.originalname.replace(/\.[^/.]+$/, '.mp4'),
                 };
+                sourceForGifPath = outputPath;
+                sourceDurationSec = clipDuration;
             }
+            const safeGifStart = Number.isFinite(gifStartInput) ? Math.max(0, gifStartInput) : 0;
+            const normalizedGifStart = Math.min(Math.max(sourceDurationSec - 0.5, 0), safeGifStart);
+            const desiredGifEnd = Number.isFinite(gifEndInput || NaN)
+                ? Math.max(normalizedGifStart + 0.5, gifEndInput)
+                : Math.min(sourceDurationSec, normalizedGifStart + DEFAULT_GIF_DURATION_SEC);
+            const normalizedGifEnd = Math.min(sourceDurationSec, normalizedGifStart + MAX_GIF_DURATION_SEC, desiredGifEnd);
+            const gifDuration = Math.max(0.5, normalizedGifEnd - normalizedGifStart);
+            await this.createGif({
+                inputPath: sourceForGifPath,
+                outputPath: gifPath,
+                start: normalizedGifStart,
+                duration: gifDuration,
+            });
+            const gifBuffer = await fs_2.promises.readFile(gifPath);
+            gifFile = {
+                ...processedFile,
+                buffer: gifBuffer,
+                size: gifBuffer.length,
+                mimetype: 'image/gif',
+                originalname: processedFile.originalname.replace(/\.[^/.]+$/, '.gif'),
+            };
         }
         catch (error) {
             const message = String(error?.message || error);
@@ -279,8 +425,12 @@ let VideosController = VideosController_1 = class VideosController {
         finally {
             await fs_2.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => { });
         }
+        if (!gifFile) {
+            throw new common_1.BadRequestException('Failed to generate GIF preview');
+        }
         const created = await this.videos.createVideo({
             file: processedFile,
+            gifFile,
             title: dto.title,
             description: dto.description,
             categoryId: dto.categoryId,
@@ -309,36 +459,21 @@ let VideosController = VideosController_1 = class VideosController {
         catch (error) {
             this.logger.warn(`Telegram deleteMessage failed for ${id}: ${String(error)}`);
         }
+        if (deleted.telegramGifChannelId && deleted.telegramGifMessageId) {
+            try {
+                await this.telegram.deleteMessage(deleted.telegramGifChannelId, deleted.telegramGifMessageId);
+            }
+            catch (error) {
+                this.logger.warn(`Telegram GIF deleteMessage failed for ${id}: ${String(error)}`);
+            }
+        }
         return { id: deleted.id };
     }
     async stream(id, res) {
         const video = await this.videos.getVideo(id);
-        if (video.isPremium) {
-            const authHeader = res.req.headers.authorization || '';
-            const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-            if (!token) {
-                res.status(401).json({ message: 'Authentication required' });
-                return;
-            }
-            try {
-                const payload = await this.jwt.verifyAsync(token);
-                if (!payload?.sub) {
-                    res.status(401).json({ message: 'Invalid token' });
-                    return;
-                }
-                const viewer = await this.users.findById(payload.sub);
-                const active = viewer.membershipType === 'PREMIUM' &&
-                    (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
-                if (!active) {
-                    res.status(403).json({ message: 'Premium membership required' });
-                    return;
-                }
-            }
-            catch {
-                res.status(401).json({ message: 'Invalid token' });
-                return;
-            }
-        }
+        if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
+            return;
+        this.setStreamCacheHeaders(res, video.isPremium);
         const cached = await this.getCachedFile(video.telegramFileId);
         if (cached) {
             await this.streamFromCache(res, cached.filePath, cached.size);
@@ -346,106 +481,44 @@ let VideosController = VideosController_1 = class VideosController {
         }
         const fileInfo = await this.telegram.getFile(video.telegramFileId);
         void this.ensureCached(video.telegramFileId, fileInfo.file_path);
-        const range = res.req.headers.range;
-        const fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path, range);
-        if (!fileResponse.ok || !fileResponse.body) {
-            res.status(502).json({ message: 'Failed to stream video' });
-            return;
-        }
-        const headers = {
-            'Content-Type': fileResponse.headers.get('content-type') || 'video/mp4',
-            'Content-Length': fileResponse.headers.get('content-length') || '',
-        };
-        const contentRange = fileResponse.headers.get('content-range');
-        if (contentRange)
-            headers['Content-Range'] = contentRange;
-        const acceptRanges = fileResponse.headers.get('accept-ranges');
-        if (acceptRanges)
-            headers['Accept-Ranges'] = acceptRanges;
-        const status = fileResponse.status;
-        res.status(status);
-        Object.entries(headers).forEach(([key, value]) => {
-            if (value)
-                res.setHeader(key, value);
+        await this.proxyTelegramFile({
+            res,
+            fileId: video.telegramFileId,
+            telegramFilePath: fileInfo.file_path,
+            defaultContentType: 'video/mp4',
+            errorMessage: 'Failed to stream video',
+            allowRange: true,
         });
-        const bodyStream = fileResponse.body;
-        const cancelUpstream = () => {
-            if (!bodyStream)
-                return;
-            try {
-                if ('locked' in bodyStream && bodyStream.locked)
-                    return;
-                const result = bodyStream.cancel();
-                if (result && typeof result.catch === 'function') {
-                    result.catch(() => { });
-                }
-            }
-            catch { }
-        };
-        const stream = stream_1.Readable.fromWeb(fileResponse.body);
-        stream.on('error', (error) => {
-            this.logger.warn(`Stream error for video ${id}: ${String(error)}`);
-            if (!res.headersSent)
-                res.status(499);
-            res.end();
-        });
-        res.on('close', () => {
-            cancelUpstream();
-            stream.destroy();
-        });
-        stream.pipe(res);
     }
     async preview(id, res) {
         const video = await this.videos.getVideo(id);
-        const fileInfo = await this.telegram.getFile(video.telegramFileId);
-        const range = res.req.headers.range;
-        const fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path, range);
-        if (!fileResponse.ok || !fileResponse.body) {
-            res.status(502).json({ message: 'Failed to stream preview' });
+        if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
+            return;
+        this.setStreamCacheHeaders(res, video.isPremium);
+        await this.proxyTelegramFile({
+            res,
+            fileId: video.telegramFileId,
+            defaultContentType: 'video/mp4',
+            errorMessage: 'Failed to stream preview',
+            allowRange: true,
+        });
+    }
+    async gif(id, res) {
+        const video = await this.videos.getVideo(id);
+        if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
+            return;
+        if (!video.telegramGifFileId) {
+            res.status(404).json({ message: 'GIF preview not available' });
             return;
         }
-        const headers = {
-            'Content-Type': fileResponse.headers.get('content-type') || 'video/mp4',
-            'Content-Length': fileResponse.headers.get('content-length') || '',
-        };
-        const contentRange = fileResponse.headers.get('content-range');
-        if (contentRange)
-            headers['Content-Range'] = contentRange;
-        const acceptRanges = fileResponse.headers.get('accept-ranges');
-        if (acceptRanges)
-            headers['Accept-Ranges'] = acceptRanges;
-        const status = fileResponse.status;
-        res.status(status);
-        Object.entries(headers).forEach(([key, value]) => {
-            if (value)
-                res.setHeader(key, value);
+        this.setStreamCacheHeaders(res, video.isPremium);
+        await this.proxyTelegramFile({
+            res,
+            fileId: video.telegramGifFileId,
+            defaultContentType: 'image/gif',
+            errorMessage: 'Failed to stream GIF preview',
+            allowRange: false,
         });
-        const bodyStream = fileResponse.body;
-        const cancelUpstream = () => {
-            if (!bodyStream)
-                return;
-            try {
-                if ('locked' in bodyStream && bodyStream.locked)
-                    return;
-                const result = bodyStream.cancel();
-                if (result && typeof result.catch === 'function') {
-                    result.catch(() => { });
-                }
-            }
-            catch { }
-        };
-        const stream = stream_1.Readable.fromWeb(fileResponse.body);
-        stream.on('error', (error) => {
-            this.logger.warn(`Preview stream error for video ${id}: ${String(error)}`);
-            if (!res.headersSent)
-                res.status(499);
-            res.end();
-        });
-        res.on('close', () => {
-            cancelUpstream();
-            stream.destroy();
-        });
-        stream.pipe(res);
     }
 };
 exports.VideosController = VideosController;
@@ -536,7 +609,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "stream", null);
 __decorate([
-    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, public_decorator_1.Public)(),
     (0, common_1.Get)(':id/preview'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Res)()),
@@ -544,6 +617,15 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "preview", null);
+__decorate([
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Get)(':id/gif'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "gif", null);
 exports.VideosController = VideosController = VideosController_1 = __decorate([
     (0, common_1.Controller)('videos'),
     __metadata("design:paramtypes", [videos_service_1.VideosService,

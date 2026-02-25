@@ -56,7 +56,7 @@ export function HomeVideoSections({
       pageSize: '10',
     });
 
-    const res = await fetch(`/api/videos?${params.toString()}`, { cache: 'no-store' });
+    const res = await fetch(`/api/videos?${params.toString()}`);
     if (!res.ok) {
       const message = await res.text();
       setError(message || 'Failed to load more videos');
@@ -71,7 +71,8 @@ export function HomeVideoSections({
     setLoading(false);
   }
 
-  const premiumItems = items.filter((video) => video.isPremium);
+  const visibleItems = items;
+  const premiumItems = visibleItems.filter((video) => video.isPremium);
 
   return (
     <div className="space-y-10">
@@ -83,7 +84,7 @@ export function HomeVideoSections({
           </Link>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {items.map((video) => (
+          {visibleItems.map((video) => (
             <VideoPreviewCard
               key={video.id}
               video={video}
@@ -120,7 +121,7 @@ export function HomeVideoSections({
       <div className="flex flex-col items-center gap-2 py-2 text-xs text-slate-500">
         {loading && <span>Loading more…</span>}
         {error && <span className="text-red-400">{error}</span>}
-        {page >= totalPages && items.length > 0 && <span>End of results</span>}
+        {page >= totalPages && visibleItems.length > 0 && <span>End of results</span>}
       </div>
 
       <div ref={sentinelRef} aria-hidden="true" />

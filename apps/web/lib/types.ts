@@ -25,6 +25,9 @@ export type Video = {
   category: Category;
   categoryId: string;
   isPremium: boolean;
+  hasGif: boolean;
+  likeCount: number;
+  likedByMe: boolean;
   createdAt: string;
 };
 

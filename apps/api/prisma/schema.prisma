@@ -31,6 +31,7 @@ model User {
   telegramLinkTokens   TelegramLinkToken[]
   videos               Video[]          @relation("UserUploads")
   deletedVideos        Video[]          @relation("VideoDeletedBy")
+  likes                VideoLike[]
   comments             Comment[]
   upgradeRequests      MembershipUpgradeRequest[]
   reviewedUpgrades     MembershipUpgradeRequest[] @relation("ReviewedBy")
@@ -44,6 +45,9 @@ model Video {
   telegramFileId     String
   telegramMessageId  String
   telegramChannelId  String
+  telegramGifFileId  String?
+  telegramGifMessageId String?
+  telegramGifChannelId String?
   isPremium          Boolean  @default(false)
   createdAt          DateTime @default(now())
   deletedAt          DateTime?
@@ -55,11 +59,26 @@ model Video {
   uploader           User?    @relation("UserUploads", fields: [uploaderId], references: [id])
   deletedById        String?
   deletedBy          User?    @relation("VideoDeletedBy", fields: [deletedById], references: [id])
+  likes              VideoLike[]
   comments           Comment[]
 
   @@index([title])
   @@index([categoryId])
   @@index([deletedAt])
+}
+
+model VideoLike {
+  id        String   @id @default(uuid())
+  userId    String
+  videoId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video     Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@index([videoId])
+  @@index([userId])
 }
 
 model Comment {

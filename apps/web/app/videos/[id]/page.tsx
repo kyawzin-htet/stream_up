@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import { apiFetch } from '../../../lib/api';
 import type { Comment, Paginated, Video } from '../../../lib/types';
 import { VideoPlayer } from '../../../components/VideoPlayer';
-import { getCurrentUser } from '../../../lib/auth';
+import { getAccessToken, getCurrentUser } from '../../../lib/auth';
 import { VideoPreviewCard } from '../../../components/VideoPreviewCard';
 import { CommentsSection } from '../../../components/CommentsSection';
+import { VideoLikeButton } from '../../../components/VideoLikeButton';
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const video = await apiFetch<Video>(`/videos/${params.id}`);
@@ -15,37 +16,56 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 export default async function VideoDetailPage({ params }: { params: { id: string } }) {
-  const video = await apiFetch<Video>(`/videos/${params.id}`);
-  const user = await getCurrentUser();
+  const [token, user] = await Promise.all([
+    getAccessToken(),
+    getCurrentUser(),
+  ]);
+  const video = await apiFetch<Video>(`/videos/${params.id}`, {}, token);
   const isAdmin = Boolean(user?.isAdmin);
   const hasPremium =
     user?.membershipType === 'PREMIUM' &&
     (!user.membershipExpiresAt || new Date(user.membershipExpiresAt).getTime() > Date.now());
-  const premiumRequired = video.isPremium && !hasPremium;
   const canAccessPremium = isAdmin || hasPremium;
 
   const categorySlug = video.category?.slug || '';
   const keyword = video.keywords?.[0] || '';
 
-  const [relatedByCategory, relatedByKeyword, comments] = await Promise.all([
+  const [relatedByCategory, relatedByKeyword, fallbackRelated, comments] = await Promise.all([
     categorySlug
       ? apiFetch<Paginated<Video>>(
-          `/videos?category=${encodeURIComponent(categorySlug)}&page=1&pageSize=10`,
+          `/videos?category=${encodeURIComponent(categorySlug)}&page=1&pageSize=16`,
         )
-      : Promise.resolve({ items: [], page: 1, pageSize: 10, total: 0, totalPages: 1 }),
+      : Promise.resolve({ items: [], page: 1, pageSize: 16, total: 0, totalPages: 1 }),
     keyword
       ? apiFetch<Paginated<Video>>(
-          `/videos?query=${encodeURIComponent(keyword)}&page=1&pageSize=10`,
+          `/videos?query=${encodeURIComponent(keyword)}&page=1&pageSize=16`,
         )
-      : Promise.resolve({ items: [], page: 1, pageSize: 10, total: 0, totalPages: 1 }),
+      : Promise.resolve({ items: [], page: 1, pageSize: 16, total: 0, totalPages: 1 }),
+    apiFetch<Paginated<Video>>('/videos?page=1&pageSize=24'),
     apiFetch<Comment[]>(`/videos/${params.id}/comments`),
   ]);
 
-  const categoryItems = relatedByCategory.items.filter((item) => item.id !== video.id);
-  const categoryIds = new Set(categoryItems.map((item) => item.id));
-  const keywordItems = relatedByKeyword.items.filter(
-    (item) => item.id !== video.id && !categoryIds.has(item.id),
-  );
+  const categoryItems = relatedByCategory.items
+    .filter((item) => item.id !== video.id)
+    .slice(0, 8);
+  const seenIds = new Set([video.id, ...categoryItems.map((item) => item.id)]);
+  const keywordItems = relatedByKeyword.items
+    .filter((item) => !seenIds.has(item.id))
+    .slice(0, 8);
+  keywordItems.forEach((item) => seenIds.add(item.id));
+  const fallbackItems = fallbackRelated.items
+    .filter((item) => !seenIds.has(item.id))
+    .slice(0, 8);
+  const relatedItems = [...categoryItems, ...keywordItems, ...fallbackItems].slice(0, 12);
+  const relatedKeywordLabel =
+    keywordItems.length > 0 && keyword
+      ? ` + ${keywordItems.length} keyword match${keywordItems.length > 1 ? 'es' : ''}`
+      : '';
+  const relatedTitle = categoryItems.length
+    ? `Related in ${video.category?.name || 'this category'}${relatedKeywordLabel}`
+    : keywordItems.length > 0
+      ? `Related by keyword: ${keyword}`
+      : 'Related videos';
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
@@ -60,10 +80,26 @@ export default async function VideoDetailPage({ params }: { params: { id: string
                 <span className="badge">{video.isPremium ? 'Premium' : 'Free'}</span>
                 <span className="text-slate-500">Category: {video.category?.name}</span>
               </div>
+              <div className="mt-4">
+                <VideoLikeButton
+                  videoId={video.id}
+                  initialCount={video.likeCount || 0}
+                  initialLiked={Boolean(video.likedByMe)}
+                  isAuthenticated={Boolean(user)}
+                />
+              </div>
             </div>
           ) : (
             <div>
               <h1 className="text-2xl font-semibold text-slate-100">{video.title}</h1>
+              <div className="mt-3">
+                <VideoLikeButton
+                  videoId={video.id}
+                  initialCount={video.likeCount || 0}
+                  initialLiked={Boolean(video.likedByMe)}
+                  isAuthenticated={Boolean(user)}
+                />
+              </div>
             </div>
           )}
           <CommentsSection
@@ -74,30 +110,11 @@ export default async function VideoDetailPage({ params }: { params: { id: string
           />
         </div>
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          {categoryItems.length > 0 && (
+          {relatedItems.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-slate-100">
-                Related in {video.category?.name || 'this category'}
-              </h2>
+              <h2 className="text-lg font-semibold text-slate-100">{relatedTitle}</h2>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-2">
-                {categoryItems.map((item) => (
-                  <VideoPreviewCard
-                    key={item.id}
-                    video={item}
-                    showDateTime={isAdmin}
-                    locked={item.isPremium && !canAccessPremium}
-                    className="w-full"
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {keyword && keywordItems.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-slate-100">Related: {keyword}</h2>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-2">
-                {keywordItems.map((item) => (
+                {relatedItems.map((item) => (
                   <VideoPreviewCard
                     key={item.id}
                     video={item}

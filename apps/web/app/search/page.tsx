@@ -13,13 +13,13 @@ export default async function SearchPage({
   const category = searchParams?.category || '';
   const page = Number(searchParams?.page || '1');
 
-  const [videos, categories] = await Promise.all([
+  const [videos, categories, user] = await Promise.all([
     apiFetch<Paginated<Video>>(
       `/videos?query=${encodeURIComponent(query)}&category=${encodeURIComponent(category)}&page=${page}&pageSize=10`,
     ),
     apiFetch<Category[]>('/categories'),
+    getCurrentUser(),
   ]);
-  const user = await getCurrentUser();
   const isAdmin = Boolean(user?.isAdmin);
   const showDateTime = isAdmin;
   const isPremiumMember =
@@ -48,6 +48,7 @@ export default async function SearchPage({
               <Link
                 key={cat.id}
                 href={`/search?${params.toString()}`}
+                prefetch={false}
                 className={category === cat.slug ? 'tab-pill tab-pill-active' : 'tab-pill'}
               >
                 {cat.name}

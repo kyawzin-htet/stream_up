@@ -1,8 +1,17 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+type ApiFetchOptions = RequestInit & {
+  next?: {
+    revalidate?: number;
+    tags?: string[];
+  };
+};
+
+const DEFAULT_REVALIDATE = 30;
+
 export async function apiFetch<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
   token?: string,
 ): Promise<T> {
   const headers = new Headers(options.headers || {});
@@ -11,10 +20,17 @@ export async function apiFetch<T>(
     headers.set('Content-Type', 'application/json');
   }
 
+  const method = (options.method || 'GET').toUpperCase();
+  const shouldCache =
+    method === 'GET' && !token && options.cache === undefined && options.next === undefined;
+  const cache = options.cache ?? (shouldCache ? 'force-cache' : 'no-store');
+  const next = options.next ?? (shouldCache ? { revalidate: DEFAULT_REVALIDATE } : undefined);
+
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
-    cache: 'no-store',
+    cache,
+    ...(next ? { next } : {}),
   });
 
   if (!res.ok) {

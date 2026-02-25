@@ -16,8 +16,8 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
-import { createReadStream, createWriteStream } from 'fs';
+import { diskStorage } from 'multer';
+import { createReadStream, createWriteStream, mkdirSync } from 'fs';
 import { promises as fs } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -39,8 +39,11 @@ const CACHE_DIR = process.env.VIDEO_CACHE_DIR || path.join(os.tmpdir(), 'streamu
 const CACHE_TTL_MS = Number(process.env.VIDEO_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
 const CACHE_INFLIGHT = new Map<string, Promise<void>>();
 const SOFT_MAX_MB = Number(process.env.UPLOAD_SOFT_MAX_MB || 500);
-const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 1024);
+const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 4096);
 const MAX_DURATION_SEC = Number(process.env.UPLOAD_MAX_DURATION_SEC || 15 * 60);
+const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_SEC || 6);
+const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
+const UPLOAD_INBOX_DIR = process.env.UPLOAD_INBOX_DIR || path.join(os.tmpdir(), 'streamup-upload-inbox');
 const execFileAsync = promisify(execFile);
 
 @Controller('videos')
@@ -215,6 +218,37 @@ export class VideosController {
     await execFileAsync('ffmpeg', args);
   }
 
+  private async createGif({
+    inputPath,
+    outputPath,
+    start,
+    duration,
+  }: {
+    inputPath: string;
+    outputPath: string;
+    start: number;
+    duration: number;
+  }) {
+    const args = [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-ss',
+      String(start),
+      '-i',
+      inputPath,
+      '-t',
+      String(duration),
+      '-vf',
+      "fps=12,scale='min(480,iw)':-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=96[p];[s1][p]paletteuse=dither=bayer:bayer_scale=5",
+      '-loop',
+      '0',
+      outputPath,
+    ];
+    await execFileAsync('ffmpeg', args);
+  }
+
   @Public()
   @Get()
   async list(
@@ -288,7 +322,21 @@ export class VideosController {
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(),
+      storage: diskStorage({
+        destination: (_req, _file, cb) => {
+          try {
+            mkdirSync(UPLOAD_INBOX_DIR, { recursive: true });
+            cb(null, UPLOAD_INBOX_DIR);
+          } catch (error) {
+            cb(error as any, UPLOAD_INBOX_DIR);
+          }
+        },
+        filename: (_req, file, cb) => {
+          const ext = path.extname(file.originalname || '').toLowerCase();
+          const safeExt = ext && /^[.a-z0-9]+$/.test(ext) ? ext : '.mp4';
+          cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${safeExt}`);
+        },
+      }),
       limits: { fileSize: HARD_MAX_MB * 1024 * 1024 },
       fileFilter: (_req, file, cb) => {
         if (!file.mimetype.startsWith('video/')) {
@@ -304,7 +352,7 @@ export class VideosController {
     @Body() dto: UploadVideoDto,
     @CurrentUser() user: { id: string },
   ) {
-    if (!file) throw new BadRequestException('Missing file');
+    if (!file?.path) throw new BadRequestException('Missing file');
 
     const keywords = dto.keywords
       ? dto.keywords.split(',').map((k) => k.trim()).filter(Boolean)
@@ -316,19 +364,14 @@ export class VideosController {
     const fileSizeMb = file.size / (1024 * 1024);
     const needsTranscode = fileSizeMb > SOFT_MAX_MB;
 
-    if (needsTranscode && !allowTranscode) {
-      throw new BadRequestException(
-        `File size ${fileSizeMb.toFixed(1)}MB exceeds ${SOFT_MAX_MB}MB. Enable quality reduction to continue.`,
-      );
-    }
-
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'streamup-upload-'));
-    const inputPath = path.join(tmpDir, file.originalname.replace(/\s+/g, '_'));
+    const inputPath = file.path;
     const outputPath = path.join(tmpDir, 'output.mp4');
-    let processedFile = file;
+    const gifPath = path.join(tmpDir, 'preview.gif');
+    let processedFile: Express.Multer.File | null = null;
+    let gifFile: Express.Multer.File | null = null;
 
     try {
-      await fs.writeFile(inputPath, file.buffer);
       const durationSec = await this.getDurationSeconds(inputPath);
       let start = Number.isFinite(trimStart) ? Math.max(0, trimStart) : 0;
       let end = Number.isFinite(trimEnd || NaN) ? Math.max(start + 1, trimEnd as number) : durationSec;
@@ -344,26 +387,61 @@ export class VideosController {
       }
 
       const needsTrim =
-        durationSec > MAX_DURATION_SEC || (Number.isFinite(trimEnd || NaN) && end > start);
-      if (needsTrim || needsTranscode) {
-        const clipDuration = Math.max(1, end - start);
+        durationSec > MAX_DURATION_SEC || start > 0 || end < durationSec - 0.5;
+      const clipDuration = Math.max(1, end - start);
+      const hasLengthReduction = clipDuration < durationSec - 0.5 || start > 0;
+      if (needsTranscode && !allowTranscode && !hasLengthReduction) {
+        throw new BadRequestException(
+          `File size ${fileSizeMb.toFixed(1)}MB exceeds ${SOFT_MAX_MB}MB. Enable quality reduction or trim a shorter segment.`,
+        );
+      }
+
+      let finalPath = inputPath;
+      let finalName = file.originalname;
+      let finalMime = file.mimetype || 'video/mp4';
+      let sourceDurationSec = durationSec;
+      if (needsTrim || (needsTranscode && allowTranscode)) {
         await this.processVideo({
           inputPath,
           outputPath,
           start,
           duration: clipDuration,
-          transcode: needsTranscode,
+          transcode: needsTranscode && allowTranscode,
         });
-
-        const buffer = await fs.readFile(outputPath);
-        processedFile = {
-          ...file,
-          buffer,
-          size: buffer.length,
-          mimetype: 'video/mp4',
-          originalname: file.originalname.replace(/\.[^/.]+$/, '.mp4'),
-        };
+        finalPath = outputPath;
+        finalName = file.originalname.replace(/\.[^/.]+$/, '.mp4');
+        finalMime = 'video/mp4';
+        sourceDurationSec = clipDuration;
       }
+
+      const buffer = await fs.readFile(finalPath);
+      processedFile = {
+        ...file,
+        buffer,
+        size: buffer.length,
+        mimetype: finalMime,
+        originalname: finalName,
+      };
+
+      const gifStart = 0;
+      const gifDuration = Math.max(
+        0.5,
+        Math.min(sourceDurationSec - gifStart, MAX_GIF_DURATION_SEC, DEFAULT_GIF_DURATION_SEC),
+      );
+      await this.createGif({
+        inputPath: finalPath,
+        outputPath: gifPath,
+        start: gifStart,
+        duration: gifDuration,
+      });
+      const gifBuffer = await fs.readFile(gifPath);
+      gifFile = {
+        ...processedFile,
+        buffer: gifBuffer,
+        size: gifBuffer.length,
+        mimetype: 'image/gif',
+        originalname: processedFile.originalname.replace(/\.[^/.]+$/, '.gif'),
+      };
     } catch (error: any) {
       const message = String(error?.message || error);
       if (message.includes('ffprobe') || message.includes('ffmpeg')) {
@@ -372,10 +450,14 @@ export class VideosController {
       throw error;
     } finally {
       await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+      await fs.unlink(file.path).catch(() => {});
     }
+
+    if (!processedFile || !gifFile) throw new BadRequestException('Failed to prepare video file');
 
     const created = await this.videos.createVideo({
       file: processedFile,
+      gifFile,
       title: dto.title,
       description: dto.description,
       categoryId: dto.categoryId,

@@ -66,6 +66,7 @@ export function UserShell({
                 <Link
                   key={category.id}
                   href={`/search?category=${encodeURIComponent(category.slug)}`}
+                  prefetch={false}
                   className="block rounded-lg px-2 py-1 hover:bg-slate-800/50 hover:text-white"
                 >
                   {category.name}

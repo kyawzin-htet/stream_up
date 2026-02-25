@@ -10,12 +10,18 @@ async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, { cors: true });
     const config = app.get(config_1.ConfigService);
     app.use((0, helmet_1.default)());
-    app.use((0, express_rate_limit_1.default)({
-        windowMs: 15 * 60 * 1000,
-        max: 300,
-        standardHeaders: true,
-        legacyHeaders: false,
-    }));
+    const windowMs = Number(config.get('RATE_LIMIT_WINDOW_MS')) || 15 * 60 * 1000;
+    const max = Number(config.get('RATE_LIMIT_MAX')) ||
+        (process.env.NODE_ENV === 'production' ? 300 : 2000);
+    const disabled = config.get('RATE_LIMIT_DISABLED') === 'true';
+    if (!disabled) {
+        app.use((0, express_rate_limit_1.default)({
+            windowMs,
+            max,
+            standardHeaders: true,
+            legacyHeaders: false,
+        }));
+    }
     app.enableCors({
         origin: [config.get('WEB_URL') ?? 'http://localhost:3000'],
         credentials: true,

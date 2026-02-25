@@ -105,12 +105,14 @@ export function AdminTrashList({
     setConfirmId(null);
   }
 
+  const visibleItems = items;
+
   return (
     <div>
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Trash</h2>
-        <span className="text-xs text-slate-500">{items.length} items</span>
+        <span className="text-xs text-slate-500">{visibleItems.length} items</span>
       </div>
 
       <form onSubmit={handleSearch} className="mt-4 flex flex-wrap items-center gap-3">
@@ -129,13 +131,13 @@ export function AdminTrashList({
         </button>
       </form>
 
-      {items.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <div className="mt-4 rounded-2xl border border-slate-800/70 bg-slate-900/40 p-6 text-sm text-slate-400">
           Trash is empty.
         </div>
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {items.map((video) => (
+          {visibleItems.map((video) => (
             <div key={video.id} className="relative">
               <VideoPreviewCard
                 video={video}
@@ -178,7 +180,7 @@ export function AdminTrashList({
 
       <div className="mt-4 flex flex-col items-center gap-2 text-xs text-slate-500">
         {loading && <span>Loading more…</span>}
-        {page >= totalPages && items.length > 0 && <span>End of results</span>}
+        {page >= totalPages && visibleItems.length > 0 && <span>End of results</span>}
       </div>
       <div ref={sentinelRef} aria-hidden="true" />
 

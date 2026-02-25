@@ -88,6 +88,56 @@ export class TelegramService {
     return payload.result;
   }
 
+  async sendAnimationToChannel(file: Express.Multer.File, caption: string) {
+    const form = new FormData();
+    form.append('chat_id', this.channelId);
+    form.append('caption', caption);
+
+    const bytes = new Uint8Array(file.buffer);
+    const blob = new Blob([bytes], { type: file.mimetype || 'image/gif' });
+    form.append('animation', blob, file.originalname);
+
+    const response = await this.withRetry(() =>
+      fetch(this.apiUrl('sendAnimation'), {
+        method: 'POST',
+        body: form,
+      }),
+    );
+
+    const payload = await response.json();
+    if (!payload.ok) {
+      this.logger.error(`Telegram sendAnimation failed: ${payload.description}`);
+      throw new Error('Telegram upload failed');
+    }
+
+    return payload.result;
+  }
+
+  async sendDocumentToChannel(file: Express.Multer.File, caption: string) {
+    const form = new FormData();
+    form.append('chat_id', this.channelId);
+    form.append('caption', caption);
+
+    const bytes = new Uint8Array(file.buffer);
+    const blob = new Blob([bytes], { type: file.mimetype || 'application/octet-stream' });
+    form.append('document', blob, file.originalname);
+
+    const response = await this.withRetry(() =>
+      fetch(this.apiUrl('sendDocument'), {
+        method: 'POST',
+        body: form,
+      }),
+    );
+
+    const payload = await response.json();
+    if (!payload.ok) {
+      this.logger.error(`Telegram sendDocument failed: ${payload.description}`);
+      throw new Error('Telegram upload failed');
+    }
+
+    return payload.result;
+  }
+
   async getFile(fileId: string) {
     const response = await this.withRetry(() =>
       fetch(this.apiUrl(`getFile?file_id=${encodeURIComponent(fileId)}`)),

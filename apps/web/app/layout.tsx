@@ -16,12 +16,14 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
+  const userPromise = getCurrentUser();
+  const categoriesPromise = apiFetch<Category[]>('/categories');
+  const user = await userPromise;
   const isAdmin = Boolean(user?.isAdmin);
   let categories: Category[] = [];
   if (!isAdmin) {
     try {
-      categories = await apiFetch<Category[]>('/categories');
+      categories = await categoriesPromise;
     } catch {
       categories = [];
     }

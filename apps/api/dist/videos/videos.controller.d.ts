@@ -20,82 +20,26 @@ export declare class VideosController {
     private removeCachedFile;
     private getDurationSeconds;
     private processVideo;
+    private createGif;
+    private ensureViewerCanAccess;
+    private proxyTelegramFile;
+    private setStreamCacheHeaders;
+    private toClientVideo;
     list(query?: string, category?: string, page?: string, pageSize?: string): Promise<{
-        items: {
-            telegramFileId: undefined;
-            telegramMessageId: undefined;
-            telegramChannelId: undefined;
-            category: {
-                id: string;
-                createdAt: Date;
-                name: string;
-                slug: string;
-            };
-            id: string;
-            createdAt: Date;
-            title: string;
-            description: string;
-            keywords: string[];
-            isPremium: boolean;
-            deletedAt: Date | null;
-            categoryId: string;
-            deletedById: string | null;
-            uploaderId: string | null;
-        }[];
+        items: any[];
         total: number;
         page: number;
         pageSize: number;
         totalPages: number;
     }>;
     adminList(status?: 'active' | 'trashed', query?: string, premium?: string, page?: string, pageSize?: string): Promise<{
-        items: ({
-            category: {
-                id: string;
-                createdAt: Date;
-                name: string;
-                slug: string;
-            };
-        } & {
-            id: string;
-            createdAt: Date;
-            title: string;
-            description: string;
-            keywords: string[];
-            telegramFileId: string;
-            telegramMessageId: string;
-            telegramChannelId: string;
-            isPremium: boolean;
-            deletedAt: Date | null;
-            categoryId: string;
-            deletedById: string | null;
-            uploaderId: string | null;
-        })[];
+        items: any[];
         total: number;
         page: number;
         pageSize: number;
         totalPages: number;
     }>;
-    get(id: string): Promise<{
-        telegramFileId: undefined;
-        telegramMessageId: undefined;
-        telegramChannelId: undefined;
-        category: {
-            id: string;
-            createdAt: Date;
-            name: string;
-            slug: string;
-        };
-        id: string;
-        createdAt: Date;
-        title: string;
-        description: string;
-        keywords: string[];
-        isPremium: boolean;
-        deletedAt: Date | null;
-        categoryId: string;
-        deletedById: string | null;
-        uploaderId: string | null;
-    }>;
+    get(id: string): Promise<any>;
     upload(file: Express.Multer.File, dto: UploadVideoDto, user: {
         id: string;
     }): Promise<{
@@ -114,6 +58,9 @@ export declare class VideosController {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
@@ -133,4 +80,5 @@ export declare class VideosController {
     }>;
     stream(id: string, res: Response): Promise<void>;
     preview(id: string, res: Response): Promise<void>;
+    gif(id: string, res: Response): Promise<void>;
 }

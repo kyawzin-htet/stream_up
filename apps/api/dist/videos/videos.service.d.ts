@@ -3,10 +3,12 @@ import { TelegramService } from '../telegram/telegram.service';
 export declare class VideosService {
     private readonly prisma;
     private readonly telegram;
+    private readonly logger;
     constructor(prisma: PrismaService, telegram: TelegramService);
     private buildSearchFilter;
     createVideo(params: {
         file: Express.Multer.File;
+        gifFile: Express.Multer.File;
         title: string;
         description: string;
         categoryId: string;
@@ -29,6 +31,9 @@ export declare class VideosService {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
@@ -58,6 +63,9 @@ export declare class VideosService {
             telegramFileId: string;
             telegramMessageId: string;
             telegramChannelId: string;
+            telegramGifFileId: string | null;
+            telegramGifMessageId: string | null;
+            telegramGifChannelId: string | null;
             isPremium: boolean;
             deletedAt: Date | null;
             categoryId: string;
@@ -85,6 +93,9 @@ export declare class VideosService {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
@@ -107,6 +118,9 @@ export declare class VideosService {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
@@ -134,6 +148,9 @@ export declare class VideosService {
             telegramFileId: string;
             telegramMessageId: string;
             telegramChannelId: string;
+            telegramGifFileId: string | null;
+            telegramGifMessageId: string | null;
+            telegramGifChannelId: string | null;
             isPremium: boolean;
             deletedAt: Date | null;
             categoryId: string;
@@ -161,6 +178,9 @@ export declare class VideosService {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
@@ -183,6 +203,9 @@ export declare class VideosService {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
@@ -205,6 +228,9 @@ export declare class VideosService {
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
         isPremium: boolean;
         deletedAt: Date | null;
         categoryId: string;
