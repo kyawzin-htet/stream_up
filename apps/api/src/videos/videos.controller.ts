@@ -45,6 +45,10 @@ const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_
 const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
 const UPLOAD_INBOX_DIR = process.env.UPLOAD_INBOX_DIR || path.join(os.tmpdir(), 'streamup-upload-inbox');
 const execFileAsync = promisify(execFile);
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+  .split(',')
+  .map((value) => value.trim().toLowerCase())
+  .filter(Boolean);
 
 @Controller('videos')
 export class VideosController {
@@ -209,6 +213,8 @@ export class VideosController {
         return false;
       }
       const viewer = await this.users.findById(payload.sub);
+      const isAdmin = ADMIN_EMAILS.includes(String(viewer.email || '').toLowerCase());
+      if (isAdmin) return true;
       const active =
         viewer.membershipType === 'PREMIUM' &&
         (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
@@ -683,7 +689,6 @@ export class VideosController {
   @Get(':id/gif')
   async gif(@Param('id') id: string, @Res() res: Response) {
     const video = await this.videos.getVideo(id);
-    if (!(await this.ensureViewerCanAccess(res, video.isPremium))) return;
     if (!video.telegramGifFileId) {
       res.status(404).json({ message: 'GIF preview not available' });
       return;
@@ -727,13 +732,10 @@ export class VideosController {
     const headers: Record<string, string> = {
       'Content-Type': contentType,
       'Content-Length': fileResponse.headers.get('content-length') || '',
-      'Cache-Control': video.isPremium
-        ? 'private, max-age=300, stale-while-revalidate=3600'
-        : 'public, max-age=31536000, immutable',
+      'Cache-Control': 'public, max-age=31536000, immutable',
       'Content-Disposition': 'inline',
       ETag: `W/"preview-${video.telegramGifFileId}"`,
     };
-    if (video.isPremium) headers.Vary = 'Authorization';
 
     const status = fileResponse.status;
     res.status(status);

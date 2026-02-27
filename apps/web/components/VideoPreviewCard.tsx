@@ -26,7 +26,7 @@ export function VideoPreviewCard({
   const [gifExhausted, setGifExhausted] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(false);
   const [previewMode, setPreviewMode] = useState<'image' | 'video'>('image');
-  const allowPreview = !locked;
+  const allowPreview = true;
   const hasGif = Boolean(video.hasGif);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export function VideoPreviewCard({
   }, [allowPreview]);
 
   const cardClassName = `group aspect-[3/4] w-full overflow-hidden rounded-2xl border border-slate-200/40 bg-transparent p-0 transition dark:border-slate-800/80 ${locked ? 'cursor-not-allowed opacity-90' : 'hover:-translate-y-0.5 hover:shadow-lg'} ${className ?? ''}`;
-  const canLoadGif = !locked;
+  const canLoadGif = true;
   const showGif = hasGif && canLoadGif && shouldLoad && !gifExhausted;
   const showImagePreview = showGif && previewMode === 'image';
   const showVideoPreview = showGif && previewMode === 'video';
@@ -171,7 +171,7 @@ export function VideoPreviewCard({
     </div>
   );
 
-  if (locked || !linkable) {
+  if (!linkable) {
     return (
       <div className={cardClassName} aria-disabled={locked || undefined}>
         {content}
