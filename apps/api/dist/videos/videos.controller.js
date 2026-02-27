@@ -38,10 +38,11 @@ const CACHE_DIR = process.env.VIDEO_CACHE_DIR || path.join(os.tmpdir(), 'streamu
 const CACHE_TTL_MS = Number(process.env.VIDEO_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
 const CACHE_INFLIGHT = new Map();
 const SOFT_MAX_MB = Number(process.env.UPLOAD_SOFT_MAX_MB || 500);
-const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 1024);
+const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 4096);
 const MAX_DURATION_SEC = Number(process.env.UPLOAD_MAX_DURATION_SEC || 15 * 60);
 const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_SEC || 6);
 const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
+const UPLOAD_INBOX_DIR = process.env.UPLOAD_INBOX_DIR || path.join(os.tmpdir(), 'streamup-upload-inbox');
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
 let VideosController = VideosController_1 = class VideosController {
     constructor(videos, users, telegram, jwt) {
@@ -146,6 +147,53 @@ let VideosController = VideosController_1 = class VideosController {
         CACHE_INFLIGHT.delete(fileId);
         await fs_2.promises.unlink(filePath).catch(() => { });
     }
+    toClientVideo(video) {
+        return {
+            ...video,
+            hasGif: Boolean(video.telegramGifFileId),
+            telegramFileId: undefined,
+            telegramMessageId: undefined,
+            telegramChannelId: undefined,
+            telegramGifFileId: undefined,
+            telegramGifMessageId: undefined,
+            telegramGifChannelId: undefined,
+        };
+    }
+    shouldClearGifMetadata(error) {
+        const message = String(error?.message || error).toLowerCase();
+        return (message.includes('wrong file identifier') ||
+            message.includes('file not found') ||
+            message.includes('failed to get http url content'));
+    }
+    async ensureViewerCanAccess(res, isPremium) {
+        if (!isPremium)
+            return true;
+        const authHeader = res.req.headers.authorization || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+        if (!token) {
+            res.status(401).json({ message: 'Authentication required' });
+            return false;
+        }
+        try {
+            const payload = await this.jwt.verifyAsync(token);
+            if (!payload?.sub) {
+                res.status(401).json({ message: 'Invalid token' });
+                return false;
+            }
+            const viewer = await this.users.findById(payload.sub);
+            const active = viewer.membershipType === 'PREMIUM' &&
+                (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
+            if (!active) {
+                res.status(403).json({ message: 'Premium membership required' });
+                return false;
+            }
+            return true;
+        }
+        catch {
+            res.status(401).json({ message: 'Invalid token' });
+            return false;
+        }
+    }
     async getDurationSeconds(filePath) {
         const { stdout } = await execFileAsync('ffprobe', [
             '-v',
@@ -193,103 +241,6 @@ let VideosController = VideosController_1 = class VideosController {
         ];
         await execFileAsync('ffmpeg', args);
     }
-    async ensureViewerCanAccess(res, isPremium) {
-        if (!isPremium)
-            return true;
-        const authHeader = res.req.headers.authorization || '';
-        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-        if (!token) {
-            res.status(401).json({ message: 'Authentication required' });
-            return false;
-        }
-        try {
-            const payload = await this.jwt.verifyAsync(token);
-            if (!payload?.sub) {
-                res.status(401).json({ message: 'Invalid token' });
-                return false;
-            }
-            const viewer = await this.users.findById(payload.sub);
-            const active = viewer.membershipType === 'PREMIUM' &&
-                (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
-            if (!active) {
-                res.status(403).json({ message: 'Premium membership required' });
-                return false;
-            }
-            return true;
-        }
-        catch {
-            res.status(401).json({ message: 'Invalid token' });
-            return false;
-        }
-    }
-    async proxyTelegramFile({ res, fileId, telegramFilePath, defaultContentType, errorMessage, allowRange = false, }) {
-        const filePath = telegramFilePath || (await this.telegram.getFile(fileId)).file_path;
-        const range = allowRange ? (res.req.headers.range || undefined) : undefined;
-        const fileResponse = await this.telegram.fetchFileStream(filePath, range);
-        if (!fileResponse.ok || !fileResponse.body) {
-            res.status(502).json({ message: errorMessage });
-            return;
-        }
-        const headers = {
-            'Content-Type': fileResponse.headers.get('content-type') || defaultContentType,
-            'Content-Length': fileResponse.headers.get('content-length') || '',
-        };
-        const contentRange = fileResponse.headers.get('content-range');
-        if (contentRange)
-            headers['Content-Range'] = contentRange;
-        const acceptRanges = fileResponse.headers.get('accept-ranges');
-        if (acceptRanges)
-            headers['Accept-Ranges'] = acceptRanges;
-        res.status(fileResponse.status);
-        Object.entries(headers).forEach(([key, value]) => {
-            if (value)
-                res.setHeader(key, value);
-        });
-        const bodyStream = fileResponse.body;
-        const cancelUpstream = () => {
-            if (!bodyStream)
-                return;
-            try {
-                if ('locked' in bodyStream && bodyStream.locked)
-                    return;
-                const result = bodyStream.cancel();
-                if (result && typeof result.catch === 'function') {
-                    result.catch(() => { });
-                }
-            }
-            catch { }
-        };
-        const stream = stream_1.Readable.fromWeb(fileResponse.body);
-        stream.on('error', (error) => {
-            this.logger.warn(`${errorMessage} (${fileId}): ${String(error)}`);
-            if (!res.headersSent)
-                res.status(499);
-            res.end();
-        });
-        res.on('close', () => {
-            cancelUpstream();
-            stream.destroy();
-        });
-        stream.pipe(res);
-    }
-    setStreamCacheHeaders(res, isPremium) {
-        res.setHeader('Cache-Control', isPremium
-            ? 'private, max-age=600, stale-while-revalidate=3600'
-            : 'public, max-age=600, stale-while-revalidate=3600');
-        res.setHeader('Vary', 'Authorization, Range');
-    }
-    toClientVideo(video) {
-        return {
-            ...video,
-            hasGif: Boolean(video.telegramGifFileId),
-            telegramFileId: undefined,
-            telegramMessageId: undefined,
-            telegramChannelId: undefined,
-            telegramGifFileId: undefined,
-            telegramGifMessageId: undefined,
-            telegramGifChannelId: undefined,
-        };
-    }
     async list(query, category, page = '1', pageSize = '12') {
         const data = await this.videos.listVideos({
             query,
@@ -333,7 +284,7 @@ let VideosController = VideosController_1 = class VideosController {
         return this.toClientVideo(video);
     }
     async upload(file, dto, user) {
-        if (!file)
+        if (!file?.path)
             throw new common_1.BadRequestException('Missing file');
         const keywords = dto.keywords
             ? dto.keywords.split(',').map((k) => k.trim()).filter(Boolean)
@@ -341,21 +292,15 @@ let VideosController = VideosController_1 = class VideosController {
         const allowTranscode = dto.allowTranscode === 'true';
         const trimStart = Number(dto.trimStart || 0);
         const trimEnd = dto.trimEnd ? Number(dto.trimEnd) : undefined;
-        const gifStartInput = dto.gifStart ? Number(dto.gifStart) : 0;
-        const gifEndInput = dto.gifEnd ? Number(dto.gifEnd) : undefined;
         const fileSizeMb = file.size / (1024 * 1024);
         const needsTranscode = fileSizeMb > SOFT_MAX_MB;
-        if (needsTranscode && !allowTranscode) {
-            throw new common_1.BadRequestException(`File size ${fileSizeMb.toFixed(1)}MB exceeds ${SOFT_MAX_MB}MB. Enable quality reduction to continue.`);
-        }
         const tmpDir = await fs_2.promises.mkdtemp(path.join(os.tmpdir(), 'streamup-upload-'));
-        const inputPath = path.join(tmpDir, file.originalname.replace(/\s+/g, '_'));
+        const inputPath = file.path;
         const outputPath = path.join(tmpDir, 'output.mp4');
         const gifPath = path.join(tmpDir, 'preview.gif');
-        let processedFile = file;
+        let processedFile = null;
         let gifFile = null;
         try {
-            await fs_2.promises.writeFile(inputPath, file.buffer);
             const durationSec = await this.getDurationSeconds(inputPath);
             let start = Number.isFinite(trimStart) ? Math.max(0, trimStart) : 0;
             let end = Number.isFinite(trimEnd || NaN) ? Math.max(start + 1, trimEnd) : durationSec;
@@ -370,40 +315,43 @@ let VideosController = VideosController_1 = class VideosController {
             else {
                 end = Math.min(end, durationSec);
             }
-            const needsTrim = durationSec > MAX_DURATION_SEC || (Number.isFinite(trimEnd || NaN) && end > start);
-            let sourceForGifPath = inputPath;
+            const needsTrim = durationSec > MAX_DURATION_SEC || start > 0 || end < durationSec - 0.5;
+            const clipDuration = Math.max(1, end - start);
+            const hasLengthReduction = clipDuration < durationSec - 0.5 || start > 0;
+            if (needsTranscode && !allowTranscode && !hasLengthReduction) {
+                throw new common_1.BadRequestException(`File size ${fileSizeMb.toFixed(1)}MB exceeds ${SOFT_MAX_MB}MB. Enable quality reduction or trim a shorter segment.`);
+            }
+            let finalPath = inputPath;
+            let finalName = file.originalname;
+            let finalMime = file.mimetype || 'video/mp4';
             let sourceDurationSec = durationSec;
-            if (needsTrim || needsTranscode) {
-                const clipDuration = Math.max(1, end - start);
+            if (needsTrim || (needsTranscode && allowTranscode)) {
                 await this.processVideo({
                     inputPath,
                     outputPath,
                     start,
                     duration: clipDuration,
-                    transcode: needsTranscode,
+                    transcode: needsTranscode && allowTranscode,
                 });
-                const buffer = await fs_2.promises.readFile(outputPath);
-                processedFile = {
-                    ...file,
-                    buffer,
-                    size: buffer.length,
-                    mimetype: 'video/mp4',
-                    originalname: file.originalname.replace(/\.[^/.]+$/, '.mp4'),
-                };
-                sourceForGifPath = outputPath;
+                finalPath = outputPath;
+                finalName = file.originalname.replace(/\.[^/.]+$/, '.mp4');
+                finalMime = 'video/mp4';
                 sourceDurationSec = clipDuration;
             }
-            const safeGifStart = Number.isFinite(gifStartInput) ? Math.max(0, gifStartInput) : 0;
-            const normalizedGifStart = Math.min(Math.max(sourceDurationSec - 0.5, 0), safeGifStart);
-            const desiredGifEnd = Number.isFinite(gifEndInput || NaN)
-                ? Math.max(normalizedGifStart + 0.5, gifEndInput)
-                : Math.min(sourceDurationSec, normalizedGifStart + DEFAULT_GIF_DURATION_SEC);
-            const normalizedGifEnd = Math.min(sourceDurationSec, normalizedGifStart + MAX_GIF_DURATION_SEC, desiredGifEnd);
-            const gifDuration = Math.max(0.5, normalizedGifEnd - normalizedGifStart);
+            const buffer = await fs_2.promises.readFile(finalPath);
+            processedFile = {
+                ...file,
+                buffer,
+                size: buffer.length,
+                mimetype: finalMime,
+                originalname: finalName,
+            };
+            const gifStart = 0;
+            const gifDuration = Math.max(0.5, Math.min(sourceDurationSec - gifStart, MAX_GIF_DURATION_SEC, DEFAULT_GIF_DURATION_SEC));
             await this.createGif({
-                inputPath: sourceForGifPath,
+                inputPath: finalPath,
                 outputPath: gifPath,
-                start: normalizedGifStart,
+                start: gifStart,
                 duration: gifDuration,
             });
             const gifBuffer = await fs_2.promises.readFile(gifPath);
@@ -424,10 +372,10 @@ let VideosController = VideosController_1 = class VideosController {
         }
         finally {
             await fs_2.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => { });
+            await fs_2.promises.unlink(file.path).catch(() => { });
         }
-        if (!gifFile) {
-            throw new common_1.BadRequestException('Failed to generate GIF preview');
-        }
+        if (!processedFile || !gifFile)
+            throw new common_1.BadRequestException('Failed to prepare video file');
         const created = await this.videos.createVideo({
             file: processedFile,
             gifFile,
@@ -459,21 +407,12 @@ let VideosController = VideosController_1 = class VideosController {
         catch (error) {
             this.logger.warn(`Telegram deleteMessage failed for ${id}: ${String(error)}`);
         }
-        if (deleted.telegramGifChannelId && deleted.telegramGifMessageId) {
-            try {
-                await this.telegram.deleteMessage(deleted.telegramGifChannelId, deleted.telegramGifMessageId);
-            }
-            catch (error) {
-                this.logger.warn(`Telegram GIF deleteMessage failed for ${id}: ${String(error)}`);
-            }
-        }
         return { id: deleted.id };
     }
     async stream(id, res) {
         const video = await this.videos.getVideo(id);
         if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
             return;
-        this.setStreamCacheHeaders(res, video.isPremium);
         const cached = await this.getCachedFile(video.telegramFileId);
         if (cached) {
             await this.streamFromCache(res, cached.filePath, cached.size);
@@ -481,27 +420,108 @@ let VideosController = VideosController_1 = class VideosController {
         }
         const fileInfo = await this.telegram.getFile(video.telegramFileId);
         void this.ensureCached(video.telegramFileId, fileInfo.file_path);
-        await this.proxyTelegramFile({
-            res,
-            fileId: video.telegramFileId,
-            telegramFilePath: fileInfo.file_path,
-            defaultContentType: 'video/mp4',
-            errorMessage: 'Failed to stream video',
-            allowRange: true,
+        const range = res.req.headers.range;
+        const fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path, range);
+        if (!fileResponse.ok || !fileResponse.body) {
+            res.status(502).json({ message: 'Failed to stream video' });
+            return;
+        }
+        const headers = {
+            'Content-Type': fileResponse.headers.get('content-type') || 'video/mp4',
+            'Content-Length': fileResponse.headers.get('content-length') || '',
+        };
+        const contentRange = fileResponse.headers.get('content-range');
+        if (contentRange)
+            headers['Content-Range'] = contentRange;
+        const acceptRanges = fileResponse.headers.get('accept-ranges');
+        if (acceptRanges)
+            headers['Accept-Ranges'] = acceptRanges;
+        const status = fileResponse.status;
+        res.status(status);
+        Object.entries(headers).forEach(([key, value]) => {
+            if (value)
+                res.setHeader(key, value);
         });
+        const bodyStream = fileResponse.body;
+        const cancelUpstream = () => {
+            if (!bodyStream)
+                return;
+            try {
+                if ('locked' in bodyStream && bodyStream.locked)
+                    return;
+                const result = bodyStream.cancel();
+                if (result && typeof result.catch === 'function') {
+                    result.catch(() => { });
+                }
+            }
+            catch { }
+        };
+        const stream = stream_1.Readable.fromWeb(fileResponse.body);
+        stream.on('error', (error) => {
+            this.logger.warn(`Stream error for video ${id}: ${String(error)}`);
+            if (!res.headersSent)
+                res.status(499);
+            res.end();
+        });
+        res.on('close', () => {
+            cancelUpstream();
+            stream.destroy();
+        });
+        stream.pipe(res);
     }
     async preview(id, res) {
         const video = await this.videos.getVideo(id);
         if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
             return;
-        this.setStreamCacheHeaders(res, video.isPremium);
-        await this.proxyTelegramFile({
-            res,
-            fileId: video.telegramFileId,
-            defaultContentType: 'video/mp4',
-            errorMessage: 'Failed to stream preview',
-            allowRange: true,
+        const fileInfo = await this.telegram.getFile(video.telegramFileId);
+        const range = res.req.headers.range;
+        const fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path, range);
+        if (!fileResponse.ok || !fileResponse.body) {
+            res.status(502).json({ message: 'Failed to stream preview' });
+            return;
+        }
+        const headers = {
+            'Content-Type': fileResponse.headers.get('content-type') || 'video/mp4',
+            'Content-Length': fileResponse.headers.get('content-length') || '',
+        };
+        const contentRange = fileResponse.headers.get('content-range');
+        if (contentRange)
+            headers['Content-Range'] = contentRange;
+        const acceptRanges = fileResponse.headers.get('accept-ranges');
+        if (acceptRanges)
+            headers['Accept-Ranges'] = acceptRanges;
+        const status = fileResponse.status;
+        res.status(status);
+        Object.entries(headers).forEach(([key, value]) => {
+            if (value)
+                res.setHeader(key, value);
         });
+        const bodyStream = fileResponse.body;
+        const cancelUpstream = () => {
+            if (!bodyStream)
+                return;
+            try {
+                if ('locked' in bodyStream && bodyStream.locked)
+                    return;
+                const result = bodyStream.cancel();
+                if (result && typeof result.catch === 'function') {
+                    result.catch(() => { });
+                }
+            }
+            catch { }
+        };
+        const stream = stream_1.Readable.fromWeb(fileResponse.body);
+        stream.on('error', (error) => {
+            this.logger.warn(`Preview stream error for video ${id}: ${String(error)}`);
+            if (!res.headersSent)
+                res.status(499);
+            res.end();
+        });
+        res.on('close', () => {
+            cancelUpstream();
+            stream.destroy();
+        });
+        stream.pipe(res);
     }
     async gif(id, res) {
         const video = await this.videos.getVideo(id);
@@ -511,14 +531,73 @@ let VideosController = VideosController_1 = class VideosController {
             res.status(404).json({ message: 'GIF preview not available' });
             return;
         }
-        this.setStreamCacheHeaders(res, video.isPremium);
-        await this.proxyTelegramFile({
-            res,
-            fileId: video.telegramGifFileId,
-            defaultContentType: 'image/gif',
-            errorMessage: 'Failed to stream GIF preview',
-            allowRange: false,
+        let fileInfo;
+        try {
+            fileInfo = await this.telegram.getFile(video.telegramGifFileId);
+        }
+        catch (error) {
+            this.logger.warn(`GIF getFile failed for video ${id}: ${String(error)}`);
+            if (this.shouldClearGifMetadata(error)) {
+                await this.videos.clearGifMetadata(id).catch((clearError) => {
+                    this.logger.warn(`Failed to clear GIF metadata for video ${id}: ${String(clearError)}`);
+                });
+            }
+            res.status(404).json({ message: 'GIF preview not available' });
+            return;
+        }
+        let fileResponse;
+        try {
+            fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path);
+        }
+        catch (error) {
+            this.logger.warn(`GIF fetch stream failed for video ${id}: ${String(error)}`);
+            res.status(502).json({ message: 'Failed to stream GIF preview' });
+            return;
+        }
+        if (!fileResponse.ok || !fileResponse.body) {
+            res.status(502).json({ message: 'Failed to stream GIF preview' });
+            return;
+        }
+        const headers = {
+            'Content-Type': fileResponse.headers.get('content-type') || 'image/gif',
+            'Content-Length': fileResponse.headers.get('content-length') || '',
+            'Cache-Control': video.isPremium
+                ? 'private, max-age=300, stale-while-revalidate=3600'
+                : 'public, max-age=300, stale-while-revalidate=3600',
+            Vary: 'Authorization',
+        };
+        const status = fileResponse.status;
+        res.status(status);
+        Object.entries(headers).forEach(([key, value]) => {
+            if (value)
+                res.setHeader(key, value);
         });
+        const bodyStream = fileResponse.body;
+        const cancelUpstream = () => {
+            if (!bodyStream)
+                return;
+            try {
+                if ('locked' in bodyStream && bodyStream.locked)
+                    return;
+                const result = bodyStream.cancel();
+                if (result && typeof result.catch === 'function') {
+                    result.catch(() => { });
+                }
+            }
+            catch { }
+        };
+        const stream = stream_1.Readable.fromWeb(fileResponse.body);
+        stream.on('error', (error) => {
+            this.logger.warn(`GIF stream error for video ${id}: ${String(error)}`);
+            if (!res.headersSent)
+                res.status(499);
+            res.end();
+        });
+        res.on('close', () => {
+            cancelUpstream();
+            stream.destroy();
+        });
+        stream.pipe(res);
     }
 };
 exports.VideosController = VideosController;
@@ -557,7 +636,22 @@ __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, admin_guard_1.AdminGuard),
     (0, common_1.Post)(),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', {
-        storage: (0, multer_1.memoryStorage)(),
+        storage: (0, multer_1.diskStorage)({
+            destination: (_req, _file, cb) => {
+                try {
+                    (0, fs_1.mkdirSync)(UPLOAD_INBOX_DIR, { recursive: true });
+                    cb(null, UPLOAD_INBOX_DIR);
+                }
+                catch (error) {
+                    cb(error, UPLOAD_INBOX_DIR);
+                }
+            },
+            filename: (_req, file, cb) => {
+                const ext = path.extname(file.originalname || '').toLowerCase();
+                const safeExt = ext && /^[.a-z0-9]+$/.test(ext) ? ext : '.mp4';
+                cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${safeExt}`);
+            },
+        }),
         limits: { fileSize: HARD_MAX_MB * 1024 * 1024 },
         fileFilter: (_req, file, cb) => {
             if (!file.mimetype.startsWith('video/')) {

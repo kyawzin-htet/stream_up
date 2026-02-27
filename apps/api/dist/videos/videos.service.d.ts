@@ -54,6 +54,9 @@ export declare class VideosService {
                 name: string;
                 slug: string;
             };
+            _count: {
+                likes: number;
+            };
         } & {
             id: string;
             createdAt: Date;
@@ -84,6 +87,9 @@ export declare class VideosService {
             name: string;
             slug: string;
         };
+        _count: {
+            likes: number;
+        };
     } & {
         id: string;
         createdAt: Date;
@@ -108,6 +114,9 @@ export declare class VideosService {
             createdAt: Date;
             name: string;
             slug: string;
+        };
+        _count: {
+            likes: number;
         };
     } & {
         id: string;
@@ -139,6 +148,9 @@ export declare class VideosService {
                 name: string;
                 slug: string;
             };
+            _count: {
+                likes: number;
+            };
         } & {
             id: string;
             createdAt: Date;
@@ -169,6 +181,9 @@ export declare class VideosService {
             name: string;
             slug: string;
         };
+        _count: {
+            likes: number;
+        };
     } & {
         id: string;
         createdAt: Date;
@@ -193,6 +208,9 @@ export declare class VideosService {
             createdAt: Date;
             name: string;
             slug: string;
+        };
+        _count: {
+            likes: number;
         };
     } & {
         id: string;
@@ -219,6 +237,9 @@ export declare class VideosService {
             name: string;
             slug: string;
         };
+        _count: {
+            likes: number;
+        };
     } & {
         id: string;
         createdAt: Date;
@@ -237,4 +258,28 @@ export declare class VideosService {
         deletedById: string | null;
         uploaderId: string | null;
     }>;
+    getLikedVideoIds(userId: string, videoIds: string[]): Promise<string[]>;
+    isVideoLikedByUser(videoId: string, userId: string): Promise<boolean>;
+    toggleLike(videoId: string, userId: string): Promise<{
+        liked: boolean;
+        likeCount: number;
+    }>;
+    clearGifMetadata(videoId: string): Promise<{
+        id: string;
+        createdAt: Date;
+        title: string;
+        description: string;
+        keywords: string[];
+        telegramFileId: string;
+        telegramMessageId: string;
+        telegramChannelId: string;
+        telegramGifFileId: string | null;
+        telegramGifMessageId: string | null;
+        telegramGifChannelId: string | null;
+        isPremium: boolean;
+        deletedAt: Date | null;
+        categoryId: string;
+        deletedById: string | null;
+        uploaderId: string | null;
+    } | null>;
 }

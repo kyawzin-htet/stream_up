@@ -163,6 +163,67 @@ export class VideosController {
     await fs.unlink(filePath).catch(() => {});
   }
 
+  private toClientVideo(video: any) {
+    return {
+      ...video,
+      hasGif: Boolean(video.telegramGifFileId),
+      telegramFileId: undefined,
+      telegramMessageId: undefined,
+      telegramChannelId: undefined,
+      telegramGifFileId: undefined,
+      telegramGifMessageId: undefined,
+      telegramGifChannelId: undefined,
+    };
+  }
+
+  private shouldClearGifMetadata(error: unknown) {
+    const message = String((error as any)?.message || error).toLowerCase();
+    return (
+      message.includes('wrong file identifier') ||
+      message.includes('file not found') ||
+      message.includes('failed to get http url content')
+    );
+  }
+
+  private inferPreviewMimeType(filePath: string) {
+    const lower = String(filePath).toLowerCase();
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.mp4')) return 'video/mp4';
+    if (lower.endsWith('.webm')) return 'video/webm';
+    return null;
+  }
+
+  private async ensureViewerCanAccess(res: Response, isPremium: boolean) {
+    if (!isPremium) return true;
+    const authHeader = res.req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) {
+      res.status(401).json({ message: 'Authentication required' });
+      return false;
+    }
+
+    try {
+      const payload = await this.jwt.verifyAsync<{ sub?: string }>(token);
+      if (!payload?.sub) {
+        res.status(401).json({ message: 'Invalid token' });
+        return false;
+      }
+      const viewer = await this.users.findById(payload.sub);
+      const active =
+        viewer.membershipType === 'PREMIUM' &&
+        (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
+
+      if (!active) {
+        res.status(403).json({ message: 'Premium membership required' });
+        return false;
+      }
+      return true;
+    } catch {
+      res.status(401).json({ message: 'Invalid token' });
+      return false;
+    }
+  }
+
   private async getDurationSeconds(filePath: string) {
     const { stdout } = await execFileAsync('ffprobe', [
       '-v',
@@ -266,12 +327,7 @@ export class VideosController {
 
     return {
       ...data,
-      items: data.items.map((video) => ({
-        ...video,
-        telegramFileId: undefined,
-        telegramMessageId: undefined,
-        telegramChannelId: undefined,
-      })),
+      items: data.items.map((video) => this.toClientVideo(video)),
     };
   }
 
@@ -288,34 +344,37 @@ export class VideosController {
     const normalizedSize = Math.min(50, Math.max(1, Number(pageSize) || 20));
 
     if (status === 'trashed') {
-      return this.videos.listDeletedVideos({
+      const data = await this.videos.listDeletedVideos({
         page: normalizedPage,
         pageSize: normalizedSize,
         query,
       });
+      return {
+        ...data,
+        items: data.items.map((video) => this.toClientVideo(video)),
+      };
     }
 
     const premiumFilter =
       premium === 'true' ? true : premium === 'false' ? false : null;
 
-    return this.videos.listVideos({
+    const data = await this.videos.listVideos({
       query,
       premium: premiumFilter,
       page: normalizedPage,
       pageSize: normalizedSize,
     });
+    return {
+      ...data,
+      items: data.items.map((video) => this.toClientVideo(video)),
+    };
   }
 
   @Public()
   @Get(':id')
   async get(@Param('id') id: string) {
     const video = await this.videos.getVideo(id);
-    return {
-      ...video,
-      telegramFileId: undefined,
-      telegramMessageId: undefined,
-      telegramChannelId: undefined,
-    };
+    return this.toClientVideo(video);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -505,34 +564,7 @@ export class VideosController {
     @Res() res: Response,
   ) {
     const video = await this.videos.getVideo(id);
-    if (video.isPremium) {
-      const authHeader = res.req.headers.authorization || '';
-      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-      if (!token) {
-        res.status(401).json({ message: 'Authentication required' });
-        return;
-      }
-
-      try {
-        const payload = await this.jwt.verifyAsync<{ sub?: string }>(token);
-        if (!payload?.sub) {
-          res.status(401).json({ message: 'Invalid token' });
-          return;
-        }
-        const viewer = await this.users.findById(payload.sub);
-        const active =
-          viewer.membershipType === 'PREMIUM' &&
-          (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
-
-        if (!active) {
-          res.status(403).json({ message: 'Premium membership required' });
-          return;
-        }
-      } catch {
-        res.status(401).json({ message: 'Invalid token' });
-        return;
-      }
-    }
+    if (!(await this.ensureViewerCanAccess(res, video.isPremium))) return;
 
     const cached = await this.getCachedFile(video.telegramFileId);
     if (cached) {
@@ -592,10 +624,11 @@ export class VideosController {
     stream.pipe(res);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Public()
   @Get(':id/preview')
   async preview(@Param('id') id: string, @Res() res: Response) {
     const video = await this.videos.getVideo(id);
+    if (!(await this.ensureViewerCanAccess(res, video.isPremium))) return;
     const fileInfo = await this.telegram.getFile(video.telegramFileId);
     const range = res.req.headers.range as string | undefined;
     const fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path, range);
@@ -636,6 +669,93 @@ export class VideosController {
     const stream = Readable.fromWeb(fileResponse.body as any);
     stream.on('error', (error) => {
       this.logger.warn(`Preview stream error for video ${id}: ${String(error)}`);
+      if (!res.headersSent) res.status(499);
+      res.end();
+    });
+    res.on('close', () => {
+      cancelUpstream();
+      stream.destroy();
+    });
+    stream.pipe(res);
+  }
+
+  @Public()
+  @Get(':id/gif')
+  async gif(@Param('id') id: string, @Res() res: Response) {
+    const video = await this.videos.getVideo(id);
+    if (!(await this.ensureViewerCanAccess(res, video.isPremium))) return;
+    if (!video.telegramGifFileId) {
+      res.status(404).json({ message: 'GIF preview not available' });
+      return;
+    }
+
+    let fileInfo: { file_path: string; file_size?: number };
+    try {
+      fileInfo = await this.telegram.getFile(video.telegramGifFileId);
+    } catch (error) {
+      this.logger.warn(`GIF getFile failed for video ${id}: ${String(error)}`);
+      if (this.shouldClearGifMetadata(error)) {
+        await this.videos.clearGifMetadata(id).catch((clearError) => {
+          this.logger.warn(`Failed to clear GIF metadata for video ${id}: ${String(clearError)}`);
+        });
+      }
+      res.status(404).json({ message: 'GIF preview not available' });
+      return;
+    }
+
+    let fileResponse: globalThis.Response;
+    try {
+      fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path);
+    } catch (error) {
+      this.logger.warn(`GIF fetch stream failed for video ${id}: ${String(error)}`);
+      res.status(502).json({ message: 'Failed to stream GIF preview' });
+      return;
+    }
+
+    if (!fileResponse.ok || !fileResponse.body) {
+      res.status(502).json({ message: 'Failed to stream GIF preview' });
+      return;
+    }
+
+    const upstreamType = fileResponse.headers.get('content-type');
+    const inferredType = this.inferPreviewMimeType(fileInfo.file_path);
+    const contentType =
+      upstreamType && upstreamType !== 'application/octet-stream'
+        ? upstreamType
+        : inferredType || upstreamType || 'application/octet-stream';
+
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'Content-Length': fileResponse.headers.get('content-length') || '',
+      'Cache-Control': video.isPremium
+        ? 'private, max-age=300, stale-while-revalidate=3600'
+        : 'public, max-age=31536000, immutable',
+      'Content-Disposition': 'inline',
+      ETag: `W/"preview-${video.telegramGifFileId}"`,
+    };
+    if (video.isPremium) headers.Vary = 'Authorization';
+
+    const status = fileResponse.status;
+    res.status(status);
+    Object.entries(headers).forEach(([key, value]) => {
+      if (value) res.setHeader(key, value);
+    });
+
+    const bodyStream = fileResponse.body as ReadableStream | null;
+    const cancelUpstream = () => {
+      if (!bodyStream) return;
+      try {
+        if ('locked' in bodyStream && (bodyStream as any).locked) return;
+        const result = bodyStream.cancel();
+        if (result && typeof (result as Promise<void>).catch === 'function') {
+          (result as Promise<void>).catch(() => {});
+        }
+      } catch {}
+    };
+
+    const stream = Readable.fromWeb(fileResponse.body as any);
+    stream.on('error', (error) => {
+      this.logger.warn(`GIF stream error for video ${id}: ${String(error)}`);
       if (!res.headersSent) res.status(499);
       res.end();
     });

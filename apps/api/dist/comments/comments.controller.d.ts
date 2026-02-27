@@ -17,16 +17,16 @@ export declare class CommentsController {
             id: string;
             createdAt: Date;
             userId: string;
-            body: string;
             videoId: string;
+            body: string;
             parentId: string | null;
         })[];
     } & {
         id: string;
         createdAt: Date;
         userId: string;
-        body: string;
         videoId: string;
+        body: string;
         parentId: string | null;
     })[]>;
     create(id: string, dto: CreateCommentDto, user: {
@@ -40,8 +40,8 @@ export declare class CommentsController {
         id: string;
         createdAt: Date;
         userId: string;
-        body: string;
         videoId: string;
+        body: string;
         parentId: string | null;
     }>;
     reply(id: string, dto: CreateCommentDto, user: {
@@ -55,8 +55,8 @@ export declare class CommentsController {
         id: string;
         createdAt: Date;
         userId: string;
-        body: string;
         videoId: string;
+        body: string;
         parentId: string | null;
     }>;
 }

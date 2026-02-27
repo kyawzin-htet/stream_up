@@ -36,9 +36,17 @@ export class VideosService {
     uploaderId?: string;
   }) {
     const caption = `${params.title}\n\n${params.description}`;
+    const uploadGif = async () => {
+      try {
+        return await this.telegram.sendAnimationToChannel(params.gifFile, `${params.title}\n\nGIF preview`);
+      } catch (error) {
+        this.logger.warn(`sendAnimation failed, falling back to sendDocument: ${String(error)}`);
+        return this.telegram.sendDocumentToChannel(params.gifFile, `${params.title}\n\nGIF preview`);
+      }
+    };
     const [videoResult, gifResult] = await Promise.all([
       this.telegram.sendVideoToChannel(params.file, caption),
-      this.telegram.sendDocumentToChannel(params.gifFile, `${params.title}\n\nGIF preview`),
+      uploadGif(),
     ]);
     const gifFileId = gifResult?.document?.file_id || gifResult?.animation?.file_id;
     if (!gifFileId) {
@@ -131,21 +139,71 @@ export class VideosService {
   }
 
   async getVideo(id: string) {
-    const video = await this.prisma.video.findFirst({
-      where: { id, deletedAt: null },
-      include: { category: true, _count: { select: { likes: true } } },
-    });
-    if (!video) throw new NotFoundException('Video not found');
-    return video;
+    try {
+      const video = await this.prisma.video.findFirst({
+        where: { id, deletedAt: null },
+        include: { category: true, _count: { select: { likes: true } } },
+      });
+      if (!video) throw new NotFoundException('Video not found');
+      return video;
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.warn(`Primary getVideo query failed for ${id}: ${String(error)}`);
+
+      const base = await this.prisma.video.findFirst({
+        where: { id, deletedAt: null },
+      });
+      if (!base) throw new NotFoundException('Video not found');
+
+      const [category, likeCount] = await Promise.all([
+        this.prisma.category.findUnique({ where: { id: base.categoryId } }),
+        this.prisma.videoLike.count({ where: { videoId: base.id } }),
+      ]);
+
+      return {
+        ...base,
+        category: category || {
+          id: base.categoryId,
+          name: 'Unknown',
+          slug: 'unknown',
+          createdAt: base.createdAt,
+        },
+        _count: { likes: likeCount },
+      };
+    }
   }
 
   async getVideoIncludingDeleted(id: string) {
-    const video = await this.prisma.video.findUnique({
-      where: { id },
-      include: { category: true, _count: { select: { likes: true } } },
-    });
-    if (!video) throw new NotFoundException('Video not found');
-    return video;
+    try {
+      const video = await this.prisma.video.findUnique({
+        where: { id },
+        include: { category: true, _count: { select: { likes: true } } },
+      });
+      if (!video) throw new NotFoundException('Video not found');
+      return video;
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.warn(`Primary getVideoIncludingDeleted query failed for ${id}: ${String(error)}`);
+
+      const base = await this.prisma.video.findUnique({ where: { id } });
+      if (!base) throw new NotFoundException('Video not found');
+
+      const [category, likeCount] = await Promise.all([
+        this.prisma.category.findUnique({ where: { id: base.categoryId } }),
+        this.prisma.videoLike.count({ where: { videoId: base.id } }),
+      ]);
+
+      return {
+        ...base,
+        category: category || {
+          id: base.categoryId,
+          name: 'Unknown',
+          slug: 'unknown',
+          createdAt: base.createdAt,
+        },
+        _count: { likes: likeCount },
+      };
+    }
   }
 
   async listDeletedVideos(params: { page: number; pageSize: number; query?: string }) {
@@ -286,5 +344,21 @@ export class VideosService {
         likeCount,
       };
     });
+  }
+
+  async clearGifMetadata(videoId: string) {
+    try {
+      return await this.prisma.video.update({
+        where: { id: videoId },
+        data: {
+          telegramGifFileId: null,
+          telegramGifMessageId: null,
+          telegramGifChannelId: null,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2025') return null;
+      throw error;
+    }
   }
 }

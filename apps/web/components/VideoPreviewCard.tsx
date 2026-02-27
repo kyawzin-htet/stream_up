@@ -25,12 +25,15 @@ export function VideoPreviewCard({
   const [gifRetry, setGifRetry] = useState(0);
   const [gifExhausted, setGifExhausted] = useState(false);
   const [shouldLoad, setShouldLoad] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'image' | 'video'>('image');
   const allowPreview = !locked;
+  const hasGif = Boolean(video.hasGif);
 
   useEffect(() => {
     setGifRetry(0);
     setGifExhausted(false);
     setShouldLoad(false);
+    setPreviewMode('image');
   }, [video.id, video.hasGif]);
 
   useEffect(() => {
@@ -52,8 +55,10 @@ export function VideoPreviewCard({
 
   const cardClassName = `group aspect-[3/4] w-full overflow-hidden rounded-2xl border border-slate-200/40 bg-transparent p-0 transition dark:border-slate-800/80 ${locked ? 'cursor-not-allowed opacity-90' : 'hover:-translate-y-0.5 hover:shadow-lg'} ${className ?? ''}`;
   const canLoadGif = !locked;
-  const showGif = canLoadGif && shouldLoad && !gifExhausted;
-  const showFallbackText = !locked && shouldLoad && gifExhausted;
+  const showGif = hasGif && canLoadGif && shouldLoad && !gifExhausted;
+  const showImagePreview = showGif && previewMode === 'image';
+  const showVideoPreview = showGif && previewMode === 'video';
+  const showFallbackText = hasGif && !locked && shouldLoad && gifExhausted;
   const likeCount = Number(video.likeCount || 0);
 
   const content = (
@@ -63,16 +68,27 @@ export function VideoPreviewCard({
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.6),_rgba(255,255,255,0))] opacity-70 dark:bg-[radial-gradient(circle_at_top,_rgba(148,163,184,0.4),_rgba(15,23,42,0))]" />
       <img
-        className={`h-full w-full object-cover transition duration-300 ${showGif ? 'opacity-100' : 'opacity-0'} group-hover:scale-[1.02]`}
+        className={`h-full w-full object-cover transition duration-300 ${showImagePreview ? 'opacity-100' : 'opacity-0'} group-hover:scale-[1.02]`}
         loading="lazy"
         alt={video.title}
-        src={showGif ? `/api/videos/${video.id}/gif?r=${gifRetry}` : undefined}
+        src={showImagePreview ? `/api/videos/${video.id}/gif?r=${gifRetry}` : undefined}
         onLoad={() => setGifExhausted(false)}
         onError={() => {
-          if (gifRetry < 2) {
-            setTimeout(() => {
-              setGifRetry((prev) => prev + 1);
-            }, 900);
+          setPreviewMode('video');
+        }}
+      />
+      <video
+        className={`absolute inset-0 h-full w-full object-cover transition duration-300 ${showVideoPreview ? 'opacity-100' : 'opacity-0'} group-hover:scale-[1.02]`}
+        muted
+        loop
+        autoPlay
+        playsInline
+        preload="metadata"
+        src={showVideoPreview ? `/api/videos/${video.id}/gif?r=${gifRetry}` : undefined}
+        onLoadedData={() => setGifExhausted(false)}
+        onError={() => {
+          if (gifRetry < 1) {
+            setGifRetry((prev) => prev + 1);
             return;
           }
           setGifExhausted(true);
@@ -132,9 +148,11 @@ export function VideoPreviewCard({
           )}
         </div>
       )}
-      <div className="absolute right-3 top-3 z-0 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white">
-        GIF
-      </div>
+      {hasGif && (
+        <div className="absolute right-3 top-3 z-0 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white">
+          GIF
+        </div>
+      )}
       {locked && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/40 text-xs font-semibold uppercase tracking-[0.2em] text-white">
           Premium only

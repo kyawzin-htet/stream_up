@@ -21,15 +21,25 @@ export async function apiFetch<T>(
   }
 
   const method = (options.method || 'GET').toUpperCase();
-  const shouldCache =
-    method === 'GET' && !token && options.cache === undefined && options.next === undefined;
-  const cache = options.cache ?? (shouldCache ? 'force-cache' : 'no-store');
-  const next = options.next ?? (shouldCache ? { revalidate: DEFAULT_REVALIDATE } : undefined);
+  const isPublicGet = method === 'GET' && !token;
+  const hasCacheOverride = options.cache !== undefined;
+  const hasNextOverride = options.next !== undefined;
+
+  let cache = options.cache;
+  let next = options.next;
+
+  if (!hasCacheOverride && !hasNextOverride) {
+    if (isPublicGet) {
+      next = { revalidate: DEFAULT_REVALIDATE };
+    } else {
+      cache = 'no-store';
+    }
+  }
 
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
-    cache,
+    ...(cache !== undefined ? { cache } : {}),
     ...(next ? { next } : {}),
   });
 

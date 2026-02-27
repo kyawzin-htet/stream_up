@@ -143,7 +143,12 @@ export class TelegramService {
       fetch(this.apiUrl(`getFile?file_id=${encodeURIComponent(fileId)}`)),
     );
     const payload = await response.json();
-    if (!payload.ok) throw new Error('Telegram getFile failed');
+    if (!payload.ok) {
+      const description = String(payload?.description || '').trim();
+      throw new Error(
+        description ? `Telegram getFile failed: ${description}` : 'Telegram getFile failed',
+      );
+    }
     return payload.result as { file_path: string; file_size?: number };
   }
 

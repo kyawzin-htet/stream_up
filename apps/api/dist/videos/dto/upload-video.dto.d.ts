@@ -7,6 +7,4 @@ export declare class UploadVideoDto {
     trimStart?: string;
     trimEnd?: string;
     allowTranscode?: string;
-    gifStart?: string;
-    gifEnd?: string;
 }

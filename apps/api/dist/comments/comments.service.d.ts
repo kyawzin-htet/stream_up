@@ -22,16 +22,16 @@ export declare class CommentsService {
             id: string;
             createdAt: Date;
             userId: string;
-            body: string;
             videoId: string;
+            body: string;
             parentId: string | null;
         })[];
     } & {
         id: string;
         createdAt: Date;
         userId: string;
-        body: string;
         videoId: string;
+        body: string;
         parentId: string | null;
     })[]>;
     createComment(params: {
@@ -48,8 +48,8 @@ export declare class CommentsService {
         id: string;
         createdAt: Date;
         userId: string;
-        body: string;
         videoId: string;
+        body: string;
         parentId: string | null;
     }>;
 }

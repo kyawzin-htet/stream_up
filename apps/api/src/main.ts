@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
+import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { cors: true });
@@ -39,6 +40,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
+  app.useGlobalFilters(new PrismaExceptionFilter());
 
   const port = Number(process.env.PORT || 3001);
   await app.listen(port);

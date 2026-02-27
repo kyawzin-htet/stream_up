@@ -9,17 +9,28 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   const token = cookies().get('access_token')?.value;
-  const res = await fetch(`${API_URL}/videos/${params.id}/gif`, {
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    cache: 'no-store',
-  });
+  const isAuthed = Boolean(token);
+  let res: globalThis.Response;
+  try {
+    res = await fetch(`${API_URL}/videos/${params.id}/gif`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(isAuthed ? { cache: 'no-store' as const } : { next: { revalidate: 24 * 60 * 60 } }),
+    });
+  } catch {
+    return new NextResponse(null, {
+      status: 502,
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
 
+  const body = await res.arrayBuffer();
   const headers = new Headers();
   const passthrough = [
     'content-type',
-    'content-length',
     'cache-control',
     'content-disposition',
     'etag',
@@ -30,8 +41,12 @@ export async function GET(
     const value = res.headers.get(key);
     if (value) headers.set(key, value);
   });
+  if (!isAuthed && !headers.has('cache-control')) {
+    headers.set('cache-control', 'public, max-age=31536000, immutable');
+  }
+  headers.set('content-length', String(body.byteLength));
 
-  return new NextResponse(res.body, {
+  return new NextResponse(body, {
     status: res.status,
     headers,
   });

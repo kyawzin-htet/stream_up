@@ -50,14 +50,4 @@ __decorate([
     (0, class_validator_1.IsBooleanString)(),
     __metadata("design:type", String)
 ], UploadVideoDto.prototype, "allowTranscode", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], UploadVideoDto.prototype, "gifStart", void 0);
-__decorate([
-    (0, class_validator_1.IsOptional)(),
-    (0, class_validator_1.IsString)(),
-    __metadata("design:type", String)
-], UploadVideoDto.prototype, "gifEnd", void 0);
 //# sourceMappingURL=upload-video.dto.js.map

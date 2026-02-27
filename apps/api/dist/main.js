@@ -6,6 +6,7 @@ const helmet_1 = require("helmet");
 const express_rate_limit_1 = require("express-rate-limit");
 const app_module_1 = require("./app.module");
 const config_1 = require("@nestjs/config");
+const prisma_exception_filter_1 = require("./common/prisma-exception.filter");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, { cors: true });
     const config = app.get(config_1.ConfigService);
@@ -31,6 +32,7 @@ async function bootstrap() {
         forbidNonWhitelisted: true,
         transform: true,
     }));
+    app.useGlobalFilters(new prisma_exception_filter_1.PrismaExceptionFilter());
     const port = Number(process.env.PORT || 3001);
     await app.listen(port);
 }

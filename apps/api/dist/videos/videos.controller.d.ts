@@ -18,13 +18,12 @@ export declare class VideosController {
     private streamFromCache;
     private warmCache;
     private removeCachedFile;
+    private toClientVideo;
+    private shouldClearGifMetadata;
+    private ensureViewerCanAccess;
     private getDurationSeconds;
     private processVideo;
     private createGif;
-    private ensureViewerCanAccess;
-    private proxyTelegramFile;
-    private setStreamCacheHeaders;
-    private toClientVideo;
     list(query?: string, category?: string, page?: string, pageSize?: string): Promise<{
         items: any[];
         total: number;
