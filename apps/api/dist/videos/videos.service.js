@@ -35,9 +35,18 @@ let VideosService = VideosService_1 = class VideosService {
     }
     async createVideo(params) {
         const caption = `${params.title}\n\n${params.description}`;
+        const uploadGif = async () => {
+            try {
+                return await this.telegram.sendAnimationToChannel(params.gifFile, `${params.title}\n\nGIF preview`);
+            }
+            catch (error) {
+                this.logger.warn(`sendAnimation failed, falling back to sendDocument: ${String(error)}`);
+                return this.telegram.sendDocumentToChannel(params.gifFile, `${params.title}\n\nGIF preview`);
+            }
+        };
         const [videoResult, gifResult] = await Promise.all([
             this.telegram.sendVideoToChannel(params.file, caption),
-            this.telegram.sendDocumentToChannel(params.gifFile, `${params.title}\n\nGIF preview`),
+            uploadGif(),
         ]);
         const gifFileId = gifResult?.document?.file_id || gifResult?.animation?.file_id;
         if (!gifFileId) {

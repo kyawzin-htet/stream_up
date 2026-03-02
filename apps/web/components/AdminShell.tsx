@@ -29,8 +29,19 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
     return pathname.startsWith(href);
   };
 
+  const mobileNavItems = useMemo(
+    () => [
+      { label: 'Home', href: '/admin' },
+      { label: 'Browse', href: '/admin/browse' },
+      { label: 'Upload', href: '/admin/upload' },
+      { label: 'Members', href: '/admin/memberships' },
+      { label: 'Trash', href: '/admin/trash' },
+    ],
+    [],
+  );
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="min-h-screen bg-slate-950 pb-20 text-slate-100 lg:pb-0">
       <div className="flex min-h-screen">
         <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-slate-800/80 bg-slate-950/90 px-6 py-6 lg:flex">
           <div className="flex items-center gap-3 text-lg font-semibold">
@@ -65,12 +76,21 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          {showHeader && (
-            <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 px-4 py-4 backdrop-blur sm:px-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 lg:hidden">
-                  <span className="text-lg font-semibold">Admin</span>
-                </div>
+          <header
+            className={`sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 px-4 py-3 backdrop-blur sm:px-6 ${
+              showHeader ? '' : 'lg:hidden'
+            }`}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3 lg:hidden">
+                <span className="text-lg font-semibold">Admin</span>
+                <form action={logoutAction}>
+                  <button className="inline-flex items-center justify-center rounded-full border border-slate-700 px-3 py-1.5 text-[11px] font-semibold text-slate-200">
+                    Logout
+                  </button>
+                </form>
+              </div>
+              {showHeader && (
                 <form action="/search" method="get" className="flex-1">
                   <div className="relative">
                     <input
@@ -81,15 +101,34 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     />
                   </div>
                 </form>
-              </div>
-            </header>
-          )}
+              )}
+            </div>
+          </header>
 
           <main className="flex-1 bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.8),_rgba(2,6,23,0.9))] px-4 py-6 pb-20 sm:px-6">
             {children}
           </main>
         </div>
       </div>
+
+      <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-800 bg-slate-950/95 px-3 py-3 text-xs text-slate-400 lg:hidden">
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {mobileNavItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 ${
+                isActive(item.href)
+                  ? 'bg-slate-800 text-emerald-300'
+                  : 'bg-slate-900/70 text-slate-400'
+              }`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }

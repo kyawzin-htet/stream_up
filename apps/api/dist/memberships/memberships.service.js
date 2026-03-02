@@ -201,8 +201,11 @@ let MembershipsService = MembershipsService_1 = class MembershipsService {
     }
     async rejectUpgradeRequest(id, adminId) {
         const request = await this.getUpgradeRequest(id);
-        if (request.status !== 'PENDING')
+        if (request.status === 'REJECTED')
             return request;
+        if (request.status === 'APPROVED') {
+            await this.updateMembership(request.userId, 'FREE', null);
+        }
         return this.prisma.membershipUpgradeRequest.update({
             where: { id },
             data: {

@@ -41,7 +41,25 @@ export function AdminUpgradeRequestsPanel({
     }
 
     const updated = await res.json();
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...updated } : item)));
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (action === 'reject') {
+          return {
+            ...item,
+            ...updated,
+            user: item.user
+              ? {
+                  ...item.user,
+                  membershipType: 'FREE',
+                  membershipExpiresAt: null,
+                }
+              : item.user,
+          };
+        }
+        return { ...item, ...updated };
+      }),
+    );
     setToastMessage(`Request ${action}d`);
   }
 
@@ -125,7 +143,7 @@ export function AdminUpgradeRequestsPanel({
                   <button
                     type="button"
                     onClick={() => handleDecision(request.id, 'reject')}
-                    disabled={request.status !== 'PENDING'}
+                    disabled={request.status === 'REJECTED'}
                     className="rounded-xl border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 disabled:opacity-50"
                   >
                     Reject

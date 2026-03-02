@@ -20,6 +20,7 @@ export declare class VideosController {
     private removeCachedFile;
     private toClientVideo;
     private shouldClearGifMetadata;
+    private inferPreviewMimeType;
     private ensureViewerCanAccess;
     private getDurationSeconds;
     private processVideo;

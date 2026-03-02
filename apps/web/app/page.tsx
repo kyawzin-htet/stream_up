@@ -16,7 +16,6 @@ export default async function HomePage() {
     (!user.membershipExpiresAt || new Date(user.membershipExpiresAt).getTime() > Date.now());
   const canAccessPremium = isAdmin || isPremiumMember;
 
-  const featured = data.items.find((item) => item.hasGif) || data.items[0];
   return (
     <div className="space-y-8 sm:space-y-10">
       <section className="rounded-3xl border border-slate-800/70 bg-slate-900/40 p-5 sm:p-6 lg:p-8">
@@ -43,33 +42,6 @@ export default async function HomePage() {
               )}
             </div>
           </div>
-          {featured ? (
-            <Link
-              href={`/videos/${featured.id}`}
-              className="group relative overflow-hidden rounded-3xl border border-slate-800/70 bg-slate-900/60"
-            >
-              <div className="aspect-video w-full overflow-hidden">
-                {featured.hasGif ? (
-                  <img
-                    className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02]"
-                    alt={featured.title}
-                    loading="lazy"
-                    src={`/api/videos/${featured.id}/gif`}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-slate-800 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
-                    Preview unavailable
-                  </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/20 to-transparent" />
-              </div>
-              <div className="absolute bottom-5 left-5 right-5 space-y-1">
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-400">Featured</p>
-                <h3 className="text-lg font-semibold text-white">{featured.title}</h3>
-                <p className="text-xs text-slate-300">{featured.description}</p>
-              </div>
-            </Link>
-          ) : null}
         </div>
       </section>
 

@@ -44,6 +44,10 @@ const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_
 const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
 const UPLOAD_INBOX_DIR = process.env.UPLOAD_INBOX_DIR || path.join(os.tmpdir(), 'streamup-upload-inbox');
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 let VideosController = VideosController_1 = class VideosController {
     constructor(videos, users, telegram, jwt) {
         this.videos = videos;
@@ -165,6 +169,16 @@ let VideosController = VideosController_1 = class VideosController {
             message.includes('file not found') ||
             message.includes('failed to get http url content'));
     }
+    inferPreviewMimeType(filePath) {
+        const lower = String(filePath).toLowerCase();
+        if (lower.endsWith('.gif'))
+            return 'image/gif';
+        if (lower.endsWith('.mp4'))
+            return 'video/mp4';
+        if (lower.endsWith('.webm'))
+            return 'video/webm';
+        return null;
+    }
     async ensureViewerCanAccess(res, isPremium) {
         if (!isPremium)
             return true;
@@ -181,6 +195,9 @@ let VideosController = VideosController_1 = class VideosController {
                 return false;
             }
             const viewer = await this.users.findById(payload.sub);
+            const isAdmin = ADMIN_EMAILS.includes(String(viewer.email || '').toLowerCase());
+            if (isAdmin)
+                return true;
             const active = viewer.membershipType === 'PREMIUM' &&
                 (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
             if (!active) {
@@ -525,8 +542,6 @@ let VideosController = VideosController_1 = class VideosController {
     }
     async gif(id, res) {
         const video = await this.videos.getVideo(id);
-        if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
-            return;
         if (!video.telegramGifFileId) {
             res.status(404).json({ message: 'GIF preview not available' });
             return;
@@ -558,13 +573,17 @@ let VideosController = VideosController_1 = class VideosController {
             res.status(502).json({ message: 'Failed to stream GIF preview' });
             return;
         }
+        const upstreamType = fileResponse.headers.get('content-type');
+        const inferredType = this.inferPreviewMimeType(fileInfo.file_path);
+        const contentType = upstreamType && upstreamType !== 'application/octet-stream'
+            ? upstreamType
+            : inferredType || upstreamType || 'application/octet-stream';
         const headers = {
-            'Content-Type': fileResponse.headers.get('content-type') || 'image/gif',
+            'Content-Type': contentType,
             'Content-Length': fileResponse.headers.get('content-length') || '',
-            'Cache-Control': video.isPremium
-                ? 'private, max-age=300, stale-while-revalidate=3600'
-                : 'public, max-age=300, stale-while-revalidate=3600',
-            Vary: 'Authorization',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Content-Disposition': 'inline',
+            ETag: `W/"preview-${video.telegramGifFileId}"`,
         };
         const status = fileResponse.status;
         res.status(status);
