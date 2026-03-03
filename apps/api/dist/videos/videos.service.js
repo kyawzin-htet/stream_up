@@ -101,11 +101,14 @@ let VideosService = VideosService_1 = class VideosService {
         if (params.query) {
             where.OR = this.buildSearchFilter(params.query);
         }
+        const orderBy = params.sort === 'popular'
+            ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }]
+            : [{ createdAt: 'desc' }];
         const [items, total] = await this.prisma.$transaction([
             this.prisma.video.findMany({
                 where,
                 include: { category: true, _count: { select: { likes: true } } },
-                orderBy: { createdAt: 'desc' },
+                orderBy,
                 skip: (params.page - 1) * params.pageSize,
                 take: params.pageSize,
             }),

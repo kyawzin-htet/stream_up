@@ -58,6 +58,20 @@ export declare class UsersService {
         membershipExpiredNoticeAt: Date | null;
         createdAt: Date;
     }>;
+    grantAdmin(userId: string, grantedByEmail?: string): Promise<{
+        id: string;
+        userId: string;
+        grantedAt: Date;
+        grantedByEmail: string | null;
+    }>;
+    revokeAdmin(userId: string): Promise<{
+        id: string;
+        userId: string;
+        grantedAt: Date;
+        grantedByEmail: string | null;
+    } | null>;
+    isAdmin(userId: string): Promise<boolean>;
+    seedAdminsFromEmails(emails: string[]): Promise<void>;
     listPremiumUsers(): Promise<{
         id: string;
         email: string;

@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { PrismaService } from '../prisma/prisma.service';
 
 const cookieExtractor = (req: { cookies?: Record<string, string> }) => {
   if (!req?.cookies) return null;
@@ -10,7 +11,10 @@ const cookieExtractor = (req: { cookies?: Record<string, string> }) => {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -22,6 +26,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: { sub: string; email: string }) {
-    return { id: payload.sub, email: payload.email };
+    // Verify user still exists. Attach id + email to request.user.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true },
+    });
+    if (!user) throw new UnauthorizedException('User not found');
+    return { id: user.id, email: user.email };
   }
 }

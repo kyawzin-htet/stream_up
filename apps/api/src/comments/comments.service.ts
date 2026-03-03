@@ -4,31 +4,28 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
+
+/** Strip all HTML tags from a string to prevent stored XSS. */
+function sanitizeBody(text: string): string {
+  return text.replace(/<[^>]*>/g, '').trim();
+}
 
 @Injectable()
 export class CommentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly users: UsersService,
-    private readonly config: ConfigService,
   ) {}
 
-  private isAdmin(email?: string | null) {
-    if (!email) return false;
-    const raw = this.config.get<string>('ADMIN_EMAILS') || '';
-    const admins = raw
-      .split(',')
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean);
-    return admins.includes(String(email).toLowerCase());
-  }
-
   private async ensureCanComment(userId: string) {
-    const user = await this.users.findById(userId);
-    if (this.isAdmin(user.email)) return;
+    const [user, isAdmin] = await Promise.all([
+      this.users.findById(userId),
+      this.users.isAdmin(userId),
+    ]);
+    if (isAdmin) return;
+
 
     const active =
       user.membershipType === 'PREMIUM' &&
@@ -96,7 +93,8 @@ export class CommentsService {
       data: {
         videoId,
         userId: params.userId,
-        body: params.body.trim(),
+        // Sanitize to strip HTML tags before persisting (prevents stored XSS)
+        body: sanitizeBody(params.body),
         parentId,
       },
       include: {
@@ -106,3 +104,4 @@ export class CommentsService {
     return created;
   }
 }
+

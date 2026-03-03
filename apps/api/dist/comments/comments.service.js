@@ -11,28 +11,22 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CommentsService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../prisma/prisma.service");
 const users_service_1 = require("../users/users.service");
+function sanitizeBody(text) {
+    return text.replace(/<[^>]*>/g, '').trim();
+}
 let CommentsService = class CommentsService {
-    constructor(prisma, users, config) {
+    constructor(prisma, users) {
         this.prisma = prisma;
         this.users = users;
-        this.config = config;
-    }
-    isAdmin(email) {
-        if (!email)
-            return false;
-        const raw = this.config.get('ADMIN_EMAILS') || '';
-        const admins = raw
-            .split(',')
-            .map((v) => v.trim().toLowerCase())
-            .filter(Boolean);
-        return admins.includes(String(email).toLowerCase());
     }
     async ensureCanComment(userId) {
-        const user = await this.users.findById(userId);
-        if (this.isAdmin(user.email))
+        const [user, isAdmin] = await Promise.all([
+            this.users.findById(userId),
+            this.users.isAdmin(userId),
+        ]);
+        if (isAdmin)
             return;
         const active = user.membershipType === 'PREMIUM' &&
             (!user.membershipExpiresAt || user.membershipExpiresAt.getTime() > Date.now());
@@ -93,7 +87,7 @@ let CommentsService = class CommentsService {
             data: {
                 videoId,
                 userId: params.userId,
-                body: params.body.trim(),
+                body: sanitizeBody(params.body),
                 parentId,
             },
             include: {
@@ -107,7 +101,6 @@ exports.CommentsService = CommentsService;
 exports.CommentsService = CommentsService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        users_service_1.UsersService,
-        config_1.ConfigService])
+        users_service_1.UsersService])
 ], CommentsService);
 //# sourceMappingURL=comments.service.js.map

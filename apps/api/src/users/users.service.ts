@@ -39,6 +39,43 @@ export class UsersService {
     });
   }
 
+  /**
+   * Grant admin access to a user. Creates a row in the Admin table if one doesn't
+   * already exist. Called on startup for emails listed in ADMIN_EMAILS, and can be
+   * called from an admin management endpoint later.
+   */
+  async grantAdmin(userId: string, grantedByEmail?: string) {
+    return this.prisma.admin.upsert({
+      where: { userId },
+      create: { userId, grantedByEmail: grantedByEmail ?? null },
+      update: {},
+    });
+  }
+
+  /** Revoke admin access by deleting the Admin row. */
+  async revokeAdmin(userId: string) {
+    return this.prisma.admin.delete({ where: { userId } }).catch(() => null);
+  }
+
+  async isAdmin(userId: string): Promise<boolean> {
+    const admin = await this.prisma.admin.findUnique({ where: { userId } });
+    return !!admin;
+  }
+
+  /**
+   * Called once on API startup from main.ts.
+   * For each email in ADMIN_EMAILS, finds the User and creates an Admin row if not present.
+   */
+  async seedAdminsFromEmails(emails: string[]) {
+    if (!emails.length) return;
+    for (const email of emails) {
+      const user = await this.prisma.user.findUnique({ where: { email } });
+      if (user) {
+        await this.grantAdmin(user.id, 'system:seed');
+      }
+    }
+  }
+
   async listPremiumUsers() {
     return this.prisma.user.findMany({
       where: { membershipType: 'PREMIUM' },

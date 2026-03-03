@@ -148,11 +148,6 @@ export function VideoPreviewCard({
           )}
         </div>
       )}
-      {hasGif && (
-        <div className="absolute right-3 top-3 z-0 rounded-full bg-slate-950/60 px-3 py-1 text-xs text-white">
-          GIF
-        </div>
-      )}
       {locked && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/40 text-xs font-semibold uppercase tracking-[0.2em] text-white">
           Premium only

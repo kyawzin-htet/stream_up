@@ -14,7 +14,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { createReadStream, createWriteStream, mkdirSync } from 'fs';
@@ -29,6 +28,7 @@ import { pipeline } from 'stream/promises';
 import { VideosService } from './videos.service';
 import { UploadVideoDto } from './dto/upload-video.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { AdminGuard } from '../common/admin.guard';
 import { CurrentUser } from '../common/current-user.decorator';
 import { Public } from '../common/public.decorator';
@@ -37,6 +37,8 @@ import { TelegramService } from '../telegram/telegram.service';
 
 const CACHE_DIR = process.env.VIDEO_CACHE_DIR || path.join(os.tmpdir(), 'streamup-video-cache');
 const CACHE_TTL_MS = Number(process.env.VIDEO_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
+// Fix 6: Maximum total cache size in bytes (default 10 GB). Oldest files are evicted when exceeded.
+const CACHE_MAX_BYTES = Number(process.env.VIDEO_CACHE_MAX_MB || 10240) * 1024 * 1024;
 const CACHE_INFLIGHT = new Map<string, Promise<void>>();
 const SOFT_MAX_MB = Number(process.env.UPLOAD_SOFT_MAX_MB || 500);
 const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 4096);
@@ -45,10 +47,6 @@ const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_
 const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
 const UPLOAD_INBOX_DIR = process.env.UPLOAD_INBOX_DIR || path.join(os.tmpdir(), 'streamup-upload-inbox');
 const execFileAsync = promisify(execFile);
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
-  .split(',')
-  .map((value) => value.trim().toLowerCase())
-  .filter(Boolean);
 
 @Controller('videos')
 export class VideosController {
@@ -58,7 +56,6 @@ export class VideosController {
     private readonly videos: VideosService,
     private readonly users: UsersService,
     private readonly telegram: TelegramService,
-    private readonly jwt: JwtService,
   ) {}
 
   private cacheKey(fileId: string) {
@@ -104,6 +101,8 @@ export class VideosController {
       const stream = Readable.fromWeb(response.body as any);
       await pipeline(stream, createWriteStream(tmpPath));
       await fs.rename(tmpPath, filePath);
+      // Fix 6: Enforce LRU size cap after writing new file (fire-and-forget).
+      void this.enforceCacheSizeLimit();
     })()
       .catch((error) => {
         this.logger.warn(`Video cache failed: ${String(error)}`);
@@ -152,6 +151,35 @@ export class VideosController {
     createReadStream(filePath, { start, end: safeEnd }).pipe(res);
   }
 
+  /**
+   * Fix 6: LRU eviction — delete oldest cache files until total size is under CACHE_MAX_BYTES.
+   * Called asynchronously after each new file is written to the cache.
+   */
+  private async enforceCacheSizeLimit() {
+    try {
+      const entries = await fs.readdir(CACHE_DIR);
+      const stats = await Promise.all(
+        entries.map(async (name) => {
+          const filePath = path.join(CACHE_DIR, name);
+          const stat = await fs.stat(filePath).catch(() => null);
+          return stat ? { filePath, size: stat.size, mtime: stat.mtimeMs } : null;
+        }),
+      );
+      const files = stats.filter(Boolean) as { filePath: string; size: number; mtime: number }[];
+      // Sort oldest first
+      files.sort((a, b) => a.mtime - b.mtime);
+      let total = files.reduce((sum, f) => sum + f.size, 0);
+      for (const file of files) {
+        if (total <= CACHE_MAX_BYTES) break;
+        await fs.unlink(file.filePath).catch(() => {});
+        total -= file.size;
+        this.logger.log(`Cache LRU: evicted ${file.filePath} (${Math.round(file.size / 1024 / 1024)}MB)`);
+      }
+    } catch {
+      // Non-fatal — cache eviction failures should not interrupt serving
+    }
+  }
+
   private async warmCache(fileId: string) {
     try {
       const fileInfo = await this.telegram.getFile(fileId);
@@ -167,9 +195,13 @@ export class VideosController {
     await fs.unlink(filePath).catch(() => {});
   }
 
-  private toClientVideo(video: any) {
+  private toClientVideo(video: any, likedByMe = false) {
+    const likeCount = Number(video?._count?.likes || 0);
     return {
       ...video,
+      likeCount,
+      likedByMe,
+      _count: undefined,
       hasGif: Boolean(video.telegramGifFileId),
       telegramFileId: undefined,
       telegramMessageId: undefined,
@@ -197,37 +229,32 @@ export class VideosController {
     return null;
   }
 
-  private async ensureViewerCanAccess(res: Response, isPremium: boolean) {
+  /**
+   * Fix 7: Premium access check via request.user set by OptionalJwtAuthGuard.
+   * Eliminates manual JWT parsing — consistent with the rest of the auth system.
+   */
+  private async ensureViewerCanAccess(
+    res: Response,
+    isPremium: boolean,
+    user: { id: string; email: string } | null,
+  ) {
     if (!isPremium) return true;
-    const authHeader = res.req.headers.authorization || '';
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    if (!token) {
+    if (!user) {
       res.status(401).json({ message: 'Authentication required' });
       return false;
     }
-
-    try {
-      const payload = await this.jwt.verifyAsync<{ sub?: string }>(token);
-      if (!payload?.sub) {
-        res.status(401).json({ message: 'Invalid token' });
-        return false;
-      }
-      const viewer = await this.users.findById(payload.sub);
-      const isAdmin = ADMIN_EMAILS.includes(String(viewer.email || '').toLowerCase());
-      if (isAdmin) return true;
-      const active =
-        viewer.membershipType === 'PREMIUM' &&
-        (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
-
-      if (!active) {
-        res.status(403).json({ message: 'Premium membership required' });
-        return false;
-      }
-      return true;
-    } catch {
-      res.status(401).json({ message: 'Invalid token' });
+    // Check Admin table first — admins bypass premium gate.
+    const isAdmin = await this.users.isAdmin(user.id);
+    if (isAdmin) return true;
+    const dbUser = await this.users.findById(user.id);
+    const active =
+      dbUser.membershipType === 'PREMIUM' &&
+      (!dbUser.membershipExpiresAt || dbUser.membershipExpiresAt.getTime() > Date.now());
+    if (!active) {
+      res.status(403).json({ message: 'Premium membership required' });
       return false;
     }
+    return true;
   }
 
   private async getDurationSeconds(filePath: string) {
@@ -316,24 +343,32 @@ export class VideosController {
     await execFileAsync('ffmpeg', args);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Public()
   @Get()
   async list(
     @Query('query') query?: string,
     @Query('category') category?: string,
+    @Query('sort') sort?: string,
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '12',
+    @CurrentUser() user?: { id: string } | null,
   ) {
+    const normalizedSort = sort === 'popular' ? 'popular' : 'latest';
     const data = await this.videos.listVideos({
       query,
       category,
+      sort: normalizedSort,
       page: Math.max(1, Number(page) || 1),
       pageSize: Math.min(50, Math.max(1, Number(pageSize) || 12)),
     });
+    const likedIds = user
+      ? new Set(await this.videos.getLikedVideoIds(user.id, data.items.map((video) => video.id)))
+      : new Set<string>();
 
     return {
       ...data,
-      items: data.items.map((video) => this.toClientVideo(video)),
+      items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id))),
     };
   }
 
@@ -376,11 +411,38 @@ export class VideosController {
     };
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Public()
   @Get(':id')
-  async get(@Param('id') id: string) {
+  async get(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string } | null,
+  ) {
     const video = await this.videos.getVideo(id);
-    return this.toClientVideo(video);
+    const likedByMe = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
+    return this.toClientVideo(video, likedByMe);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @Public()
+  @Get(':id/like')
+  async getLikeStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string } | null,
+  ) {
+    const video = await this.videos.getVideo(id);
+    const likeCount = Number(video?._count?.likes || 0);
+    const liked = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
+    return { liked, likeCount };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/like')
+  async toggleLike(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.videos.toggleLike(id, user.id);
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -563,14 +625,16 @@ export class VideosController {
     return { id: deleted.id };
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Public()
   @Get(':id/stream')
   async stream(
     @Param('id') id: string,
     @Res() res: Response,
+    @CurrentUser() user: { id: string; email: string } | null,
   ) {
     const video = await this.videos.getVideo(id);
-    if (!(await this.ensureViewerCanAccess(res, video.isPremium))) return;
+    if (!(await this.ensureViewerCanAccess(res, video.isPremium, user))) return;
 
     const cached = await this.getCachedFile(video.telegramFileId);
     if (cached) {
@@ -630,11 +694,16 @@ export class VideosController {
     stream.pipe(res);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Public()
   @Get(':id/preview')
-  async preview(@Param('id') id: string, @Res() res: Response) {
+  async preview(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @CurrentUser() user: { id: string; email: string } | null,
+  ) {
     const video = await this.videos.getVideo(id);
-    if (!(await this.ensureViewerCanAccess(res, video.isPremium))) return;
+    if (!(await this.ensureViewerCanAccess(res, video.isPremium, user))) return;
     const fileInfo = await this.telegram.getFile(video.telegramFileId);
     const range = res.req.headers.range as string | undefined;
     const fileResponse = await this.telegram.fetchFileStream(fileInfo.file_path, range);

@@ -7,8 +7,9 @@ const express_rate_limit_1 = require("express-rate-limit");
 const app_module_1 = require("./app.module");
 const config_1 = require("@nestjs/config");
 const prisma_exception_filter_1 = require("./common/prisma-exception.filter");
+const users_service_1 = require("./users/users.service");
 async function bootstrap() {
-    const app = await core_1.NestFactory.create(app_module_1.AppModule, { cors: true });
+    const app = await core_1.NestFactory.create(app_module_1.AppModule);
     const config = app.get(config_1.ConfigService);
     app.use((0, helmet_1.default)());
     const windowMs = Number(config.get('RATE_LIMIT_WINDOW_MS')) || 15 * 60 * 1000;
@@ -35,6 +36,15 @@ async function bootstrap() {
     app.useGlobalFilters(new prisma_exception_filter_1.PrismaExceptionFilter());
     const port = Number(process.env.PORT || 3001);
     await app.listen(port);
+    const usersService = app.get(users_service_1.UsersService);
+    const rawAdminEmails = config.get('ADMIN_EMAILS') || '';
+    const adminEmails = rawAdminEmails
+        .split(',')
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+    if (adminEmails.length) {
+        await usersService.seedAdminsFromEmails(adminEmails);
+    }
 }
 void bootstrap();
 //# sourceMappingURL=main.js.map

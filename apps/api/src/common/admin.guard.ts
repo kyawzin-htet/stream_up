@@ -1,21 +1,16 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AdminGuard implements CanActivate {
-  constructor(private readonly config: ConfigService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    if (!user?.email) return false;
-
-    const raw = this.config.get<string>('ADMIN_EMAILS') || '';
-    const emails = raw
-      .split(',')
-      .map((v) => v.trim().toLowerCase())
-      .filter(Boolean);
-
-    return emails.includes(String(user.email).toLowerCase());
+    if (!user?.id) return false;
+    // Check the Admin table — O(1) indexed lookup by userId.
+    const admin = await this.prisma.admin.findUnique({ where: { userId: user.id } });
+    return !!admin;
   }
 }

@@ -1,12 +1,9 @@
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 export declare class CommentsService {
     private readonly prisma;
     private readonly users;
-    private readonly config;
-    constructor(prisma: PrismaService, users: UsersService, config: ConfigService);
-    private isAdmin;
+    constructor(prisma: PrismaService, users: UsersService);
     private ensureCanComment;
     listByVideo(videoId: string): Promise<({
         user: {

@@ -15,7 +15,6 @@ var VideosController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VideosController = void 0;
 const common_1 = require("@nestjs/common");
-const jwt_1 = require("@nestjs/jwt");
 const platform_express_1 = require("@nestjs/platform-express");
 const multer_1 = require("multer");
 const fs_1 = require("fs");
@@ -29,6 +28,7 @@ const promises_1 = require("stream/promises");
 const videos_service_1 = require("./videos.service");
 const upload_video_dto_1 = require("./dto/upload-video.dto");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
+const optional_jwt_auth_guard_1 = require("../auth/optional-jwt-auth.guard");
 const admin_guard_1 = require("../common/admin.guard");
 const current_user_decorator_1 = require("../common/current-user.decorator");
 const public_decorator_1 = require("../common/public.decorator");
@@ -36,6 +36,7 @@ const users_service_1 = require("../users/users.service");
 const telegram_service_1 = require("../telegram/telegram.service");
 const CACHE_DIR = process.env.VIDEO_CACHE_DIR || path.join(os.tmpdir(), 'streamup-video-cache');
 const CACHE_TTL_MS = Number(process.env.VIDEO_CACHE_TTL_MS || 6 * 60 * 60 * 1000);
+const CACHE_MAX_BYTES = Number(process.env.VIDEO_CACHE_MAX_MB || 10240) * 1024 * 1024;
 const CACHE_INFLIGHT = new Map();
 const SOFT_MAX_MB = Number(process.env.UPLOAD_SOFT_MAX_MB || 500);
 const HARD_MAX_MB = Number(process.env.UPLOAD_MAX_MB || 4096);
@@ -44,16 +45,11 @@ const DEFAULT_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_DEFAULT_DURATION_
 const MAX_GIF_DURATION_SEC = Number(process.env.UPLOAD_GIF_MAX_DURATION_SEC || 12);
 const UPLOAD_INBOX_DIR = process.env.UPLOAD_INBOX_DIR || path.join(os.tmpdir(), 'streamup-upload-inbox');
 const execFileAsync = (0, util_1.promisify)(child_process_1.execFile);
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
-    .split(',')
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
 let VideosController = VideosController_1 = class VideosController {
-    constructor(videos, users, telegram, jwt) {
+    constructor(videos, users, telegram) {
         this.videos = videos;
         this.users = users;
         this.telegram = telegram;
-        this.jwt = jwt;
         this.logger = new common_1.Logger(VideosController_1.name);
     }
     cacheKey(fileId) {
@@ -96,6 +92,7 @@ let VideosController = VideosController_1 = class VideosController {
             const stream = stream_1.Readable.fromWeb(response.body);
             await (0, promises_1.pipeline)(stream, (0, fs_1.createWriteStream)(tmpPath));
             await fs_2.promises.rename(tmpPath, filePath);
+            void this.enforceCacheSizeLimit();
         })()
             .catch((error) => {
             this.logger.warn(`Video cache failed: ${String(error)}`);
@@ -137,6 +134,28 @@ let VideosController = VideosController_1 = class VideosController {
         res.setHeader('Content-Length', safeEnd - start + 1);
         (0, fs_1.createReadStream)(filePath, { start, end: safeEnd }).pipe(res);
     }
+    async enforceCacheSizeLimit() {
+        try {
+            const entries = await fs_2.promises.readdir(CACHE_DIR);
+            const stats = await Promise.all(entries.map(async (name) => {
+                const filePath = path.join(CACHE_DIR, name);
+                const stat = await fs_2.promises.stat(filePath).catch(() => null);
+                return stat ? { filePath, size: stat.size, mtime: stat.mtimeMs } : null;
+            }));
+            const files = stats.filter(Boolean);
+            files.sort((a, b) => a.mtime - b.mtime);
+            let total = files.reduce((sum, f) => sum + f.size, 0);
+            for (const file of files) {
+                if (total <= CACHE_MAX_BYTES)
+                    break;
+                await fs_2.promises.unlink(file.filePath).catch(() => { });
+                total -= file.size;
+                this.logger.log(`Cache LRU: evicted ${file.filePath} (${Math.round(file.size / 1024 / 1024)}MB)`);
+            }
+        }
+        catch {
+        }
+    }
     async warmCache(fileId) {
         try {
             const fileInfo = await this.telegram.getFile(fileId);
@@ -151,9 +170,13 @@ let VideosController = VideosController_1 = class VideosController {
         CACHE_INFLIGHT.delete(fileId);
         await fs_2.promises.unlink(filePath).catch(() => { });
     }
-    toClientVideo(video) {
+    toClientVideo(video, likedByMe = false) {
+        const likeCount = Number(video?._count?.likes || 0);
         return {
             ...video,
+            likeCount,
+            likedByMe,
+            _count: undefined,
             hasGif: Boolean(video.telegramGifFileId),
             telegramFileId: undefined,
             telegramMessageId: undefined,
@@ -179,37 +202,24 @@ let VideosController = VideosController_1 = class VideosController {
             return 'video/webm';
         return null;
     }
-    async ensureViewerCanAccess(res, isPremium) {
+    async ensureViewerCanAccess(res, isPremium, user) {
         if (!isPremium)
             return true;
-        const authHeader = res.req.headers.authorization || '';
-        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-        if (!token) {
+        if (!user) {
             res.status(401).json({ message: 'Authentication required' });
             return false;
         }
-        try {
-            const payload = await this.jwt.verifyAsync(token);
-            if (!payload?.sub) {
-                res.status(401).json({ message: 'Invalid token' });
-                return false;
-            }
-            const viewer = await this.users.findById(payload.sub);
-            const isAdmin = ADMIN_EMAILS.includes(String(viewer.email || '').toLowerCase());
-            if (isAdmin)
-                return true;
-            const active = viewer.membershipType === 'PREMIUM' &&
-                (!viewer.membershipExpiresAt || viewer.membershipExpiresAt.getTime() > Date.now());
-            if (!active) {
-                res.status(403).json({ message: 'Premium membership required' });
-                return false;
-            }
+        const isAdmin = await this.users.isAdmin(user.id);
+        if (isAdmin)
             return true;
-        }
-        catch {
-            res.status(401).json({ message: 'Invalid token' });
+        const dbUser = await this.users.findById(user.id);
+        const active = dbUser.membershipType === 'PREMIUM' &&
+            (!dbUser.membershipExpiresAt || dbUser.membershipExpiresAt.getTime() > Date.now());
+        if (!active) {
+            res.status(403).json({ message: 'Premium membership required' });
             return false;
         }
+        return true;
     }
     async getDurationSeconds(filePath) {
         const { stdout } = await execFileAsync('ffprobe', [
@@ -258,16 +268,21 @@ let VideosController = VideosController_1 = class VideosController {
         ];
         await execFileAsync('ffmpeg', args);
     }
-    async list(query, category, page = '1', pageSize = '12') {
+    async list(query, category, sort, page = '1', pageSize = '12', user) {
+        const normalizedSort = sort === 'popular' ? 'popular' : 'latest';
         const data = await this.videos.listVideos({
             query,
             category,
+            sort: normalizedSort,
             page: Math.max(1, Number(page) || 1),
             pageSize: Math.min(50, Math.max(1, Number(pageSize) || 12)),
         });
+        const likedIds = user
+            ? new Set(await this.videos.getLikedVideoIds(user.id, data.items.map((video) => video.id)))
+            : new Set();
         return {
             ...data,
-            items: data.items.map((video) => this.toClientVideo(video)),
+            items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id))),
         };
     }
     async adminList(status = 'active', query, premium, page = '1', pageSize = '20') {
@@ -296,9 +311,19 @@ let VideosController = VideosController_1 = class VideosController {
             items: data.items.map((video) => this.toClientVideo(video)),
         };
     }
-    async get(id) {
+    async get(id, user) {
         const video = await this.videos.getVideo(id);
-        return this.toClientVideo(video);
+        const likedByMe = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
+        return this.toClientVideo(video, likedByMe);
+    }
+    async getLikeStatus(id, user) {
+        const video = await this.videos.getVideo(id);
+        const likeCount = Number(video?._count?.likes || 0);
+        const liked = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
+        return { liked, likeCount };
+    }
+    async toggleLike(id, user) {
+        return this.videos.toggleLike(id, user.id);
     }
     async upload(file, dto, user) {
         if (!file?.path)
@@ -426,9 +451,9 @@ let VideosController = VideosController_1 = class VideosController {
         }
         return { id: deleted.id };
     }
-    async stream(id, res) {
+    async stream(id, res, user) {
         const video = await this.videos.getVideo(id);
-        if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
+        if (!(await this.ensureViewerCanAccess(res, video.isPremium, user)))
             return;
         const cached = await this.getCachedFile(video.telegramFileId);
         if (cached) {
@@ -486,9 +511,9 @@ let VideosController = VideosController_1 = class VideosController {
         });
         stream.pipe(res);
     }
-    async preview(id, res) {
+    async preview(id, res, user) {
         const video = await this.videos.getVideo(id);
-        if (!(await this.ensureViewerCanAccess(res, video.isPremium)))
+        if (!(await this.ensureViewerCanAccess(res, video.isPremium, user)))
             return;
         const fileInfo = await this.telegram.getFile(video.telegramFileId);
         const range = res.req.headers.range;
@@ -621,14 +646,17 @@ let VideosController = VideosController_1 = class VideosController {
 };
 exports.VideosController = VideosController;
 __decorate([
+    (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)(),
     __param(0, (0, common_1.Query)('query')),
     __param(1, (0, common_1.Query)('category')),
-    __param(2, (0, common_1.Query)('page')),
-    __param(3, (0, common_1.Query)('pageSize')),
+    __param(2, (0, common_1.Query)('sort')),
+    __param(3, (0, common_1.Query)('page')),
+    __param(4, (0, common_1.Query)('pageSize')),
+    __param(5, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, Object, Object]),
+    __metadata("design:paramtypes", [String, String, String, Object, Object, Object]),
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "list", null);
 __decorate([
@@ -644,13 +672,34 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "adminList", null);
 __decorate([
+    (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "get", null);
+__decorate([
+    (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Get)(':id/like'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "getLikeStatus", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Post)(':id/like'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "toggleLike", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, admin_guard_1.AdminGuard),
     (0, common_1.Post)(),
@@ -713,21 +762,25 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "remove", null);
 __decorate([
+    (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)(':id/stream'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Res)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "stream", null);
 __decorate([
+    (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)(':id/preview'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Res)()),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [String, Object, Object]),
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "preview", null);
 __decorate([
@@ -743,7 +796,6 @@ exports.VideosController = VideosController = VideosController_1 = __decorate([
     (0, common_1.Controller)('videos'),
     __metadata("design:paramtypes", [videos_service_1.VideosService,
         users_service_1.UsersService,
-        telegram_service_1.TelegramService,
-        jwt_1.JwtService])
+        telegram_service_1.TelegramService])
 ], VideosController);
 //# sourceMappingURL=videos.controller.js.map

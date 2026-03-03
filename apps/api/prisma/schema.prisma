@@ -35,6 +35,17 @@ model User {
   comments             Comment[]
   upgradeRequests      MembershipUpgradeRequest[]
   reviewedUpgrades     MembershipUpgradeRequest[] @relation("ReviewedBy")
+  adminRecord          Admin?
+}
+
+model Admin {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grantedAt      DateTime @default(now())
+  grantedByEmail String?
+
+  @@index([userId])
 }
 
 model Video {

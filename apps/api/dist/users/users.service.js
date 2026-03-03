@@ -45,6 +45,30 @@ let UsersService = class UsersService {
             },
         });
     }
+    async grantAdmin(userId, grantedByEmail) {
+        return this.prisma.admin.upsert({
+            where: { userId },
+            create: { userId, grantedByEmail: grantedByEmail ?? null },
+            update: {},
+        });
+    }
+    async revokeAdmin(userId) {
+        return this.prisma.admin.delete({ where: { userId } }).catch(() => null);
+    }
+    async isAdmin(userId) {
+        const admin = await this.prisma.admin.findUnique({ where: { userId } });
+        return !!admin;
+    }
+    async seedAdminsFromEmails(emails) {
+        if (!emails.length)
+            return;
+        for (const email of emails) {
+            const user = await this.prisma.user.findUnique({ where: { email } });
+            if (user) {
+                await this.grantAdmin(user.id, 'system:seed');
+            }
+        }
+    }
     async listPremiumUsers() {
         return this.prisma.user.findMany({
             where: { membershipType: 'PREMIUM' },

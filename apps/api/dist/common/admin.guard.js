@@ -11,27 +11,23 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminGuard = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
+const prisma_service_1 = require("../prisma/prisma.service");
 let AdminGuard = class AdminGuard {
-    constructor(config) {
-        this.config = config;
+    constructor(prisma) {
+        this.prisma = prisma;
     }
-    canActivate(context) {
+    async canActivate(context) {
         const request = context.switchToHttp().getRequest();
         const user = request.user;
-        if (!user?.email)
+        if (!user?.id)
             return false;
-        const raw = this.config.get('ADMIN_EMAILS') || '';
-        const emails = raw
-            .split(',')
-            .map((v) => v.trim().toLowerCase())
-            .filter(Boolean);
-        return emails.includes(String(user.email).toLowerCase());
+        const admin = await this.prisma.admin.findUnique({ where: { userId: user.id } });
+        return !!admin;
     }
 };
 exports.AdminGuard = AdminGuard;
 exports.AdminGuard = AdminGuard = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
 ], AdminGuard);
 //# sourceMappingURL=admin.guard.js.map

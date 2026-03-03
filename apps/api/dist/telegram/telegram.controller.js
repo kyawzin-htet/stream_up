@@ -24,8 +24,8 @@ let TelegramController = class TelegramController {
     }
     async webhook(update, secret) {
         const expected = this.config.get('TELEGRAM_WEBHOOK_SECRET');
-        if (expected && secret !== expected) {
-            return { ok: false };
+        if (!expected || secret !== expected) {
+            throw new common_1.ForbiddenException('Invalid webhook secret');
         }
         await this.telegram.handleWebhookUpdate(update);
         return { ok: true };

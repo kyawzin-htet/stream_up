@@ -44,6 +44,7 @@ export declare class VideosService {
         query?: string;
         category?: string;
         premium?: boolean | null;
+        sort?: 'latest' | 'popular';
         page: number;
         pageSize: number;
     }): Promise<{

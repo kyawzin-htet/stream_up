@@ -55,16 +55,22 @@ let AuthService = class AuthService {
         return this.issueToken(user.id, user.email);
     }
     async issueToken(userId, email) {
+        const [user, isAdmin] = await Promise.all([
+            this.users.findById(userId),
+            this.users.isAdmin(userId),
+        ]);
         const payload = { sub: userId, email };
         const accessToken = await this.jwt.signAsync(payload, {
             expiresIn: this.config.get('JWT_EXPIRES_IN') || '7d',
         });
-        const user = await this.users.findById(userId);
-        return { accessToken, user: this.buildUserResponse(user) };
+        return { accessToken, user: this.buildUserResponse(user, isAdmin) };
     }
     async getProfile(userId) {
-        const user = await this.users.findById(userId);
-        return this.buildUserResponse(user);
+        const [user, isAdmin] = await Promise.all([
+            this.users.findById(userId),
+            this.users.isAdmin(userId),
+        ]);
+        return this.buildUserResponse(user, isAdmin);
     }
     async createTelegramLinkToken(userId) {
         const token = (0, uuid_1.v4)().replace(/-/g, '');
@@ -78,19 +84,14 @@ let AuthService = class AuthService {
         });
         return token;
     }
-    buildUserResponse(user) {
-        const raw = this.config.get('ADMIN_EMAILS') || '';
-        const admins = raw
-            .split(',')
-            .map((v) => v.trim().toLowerCase())
-            .filter(Boolean);
+    buildUserResponse(user, isAdmin = false) {
         return {
             id: user.id,
             email: user.email,
             telegramUserId: user.telegramUserId,
             membershipType: user.membershipType,
             membershipExpiresAt: user.membershipExpiresAt,
-            isAdmin: admins.includes(String(user.email).toLowerCase()),
+            isAdmin,
             createdAt: user.createdAt,
         };
     }

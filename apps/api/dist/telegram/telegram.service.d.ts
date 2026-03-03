@@ -7,6 +7,7 @@ export declare class TelegramService {
     private readonly users;
     private readonly logger;
     constructor(config: ConfigService, prisma: PrismaService, users: UsersService);
+    private redactToken;
     private get botToken();
     private get channelId();
     private get groupId();

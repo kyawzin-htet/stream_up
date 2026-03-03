@@ -9,19 +9,21 @@ export default async function AccountPage() {
   if (!user) redirect('/login');
 
   const token = await getAccessToken();
-  const [pricing, requests] = await Promise.all([
-    apiFetch<PricingPlansResponse>('/pricing/plans'),
-    token ? apiFetch<MembershipUpgradeRequest[]>('/membership-upgrades/me', {}, token) : [],
-  ]);
+  const showUpgradePanel = user.membershipType !== 'PREMIUM';
+
+  let pricing: PricingPlansResponse | null = null;
+  let requests: MembershipUpgradeRequest[] = [];
+
+  if (showUpgradePanel) {
+    [pricing, requests] = await Promise.all([
+      apiFetch<PricingPlansResponse>('/pricing/plans'),
+      token ? apiFetch<MembershipUpgradeRequest[]>('/membership-upgrades/me', {}, token) : [],
+    ]);
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
-      <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-6">
-        <h1 className="text-2xl font-semibold text-slate-100">Account</h1>
-        <p className="mt-2 text-sm text-slate-400">Manage your membership and upgrade requests.</p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+      <div className={showUpgradePanel ? 'grid gap-6 lg:grid-cols-[0.8fr_1.2fr]' : 'grid gap-6'}>
         <div className="space-y-4 rounded-2xl border border-slate-800/70 bg-slate-900/60 p-6 text-sm">
           <div>
             <p className="text-xs uppercase tracking-widest text-slate-500">Membership</p>
@@ -39,11 +41,13 @@ export default async function AccountPage() {
           </form>
         </div>
 
-        <MembershipUpgradePanel
-          currency={pricing.currency}
-          plans={pricing.plans}
-          initialRequests={requests}
-        />
+        {showUpgradePanel && pricing && (
+          <MembershipUpgradePanel
+            currency={pricing.currency}
+            plans={pricing.plans}
+            initialRequests={requests}
+          />
+        )}
       </div>
     </div>
   );

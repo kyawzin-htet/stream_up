@@ -36,12 +36,12 @@ export function UserShell({
     <div className="user-shell min-h-screen bg-slate-950 text-slate-100">
       <div className="flex min-h-screen">
         <aside className="sticky top-0 hidden h-screen w-64 flex-col border-r border-slate-800/80 bg-slate-950/90 px-6 py-6 lg:flex">
-          <div className="flex items-center gap-3 text-lg font-semibold">
+          <Link href="/" className="flex items-center gap-3 text-lg font-semibold">
             <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/20 text-emerald-300">
               ▶
             </span>
             StreamUp
-          </div>
+          </Link>
           <div className="mt-6 space-y-2">
             {navItems.map((item) => (
               <Link
@@ -80,7 +80,9 @@ export function UserShell({
           <header className="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 px-4 py-4 backdrop-blur sm:px-6">
             <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex w-full items-center justify-center gap-3 text-center sm:w-auto sm:justify-start sm:text-left lg:hidden">
-                <span className="text-lg font-semibold">StreamUp</span>
+                <Link href="/" className="text-lg font-semibold">
+                  StreamUp
+                </Link>
               </div>
               <form action="/search" method="get" className="w-full sm:flex-1">
                 <div className="relative">

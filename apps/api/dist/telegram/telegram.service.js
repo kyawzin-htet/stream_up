@@ -23,6 +23,12 @@ let TelegramService = TelegramService_1 = class TelegramService {
         this.users = users;
         this.logger = new common_1.Logger(TelegramService_1.name);
     }
+    redactToken(message) {
+        const token = this.config.get('TELEGRAM_BOT_TOKEN');
+        if (!token)
+            return message;
+        return message.split(token).join('[REDACTED]');
+    }
     get botToken() {
         const token = this.config.get('TELEGRAM_BOT_TOKEN');
         if (!token)
@@ -236,7 +242,7 @@ let TelegramService = TelegramService_1 = class TelegramService {
             }
             catch (error) {
                 lastError = error;
-                this.logger.warn(`Telegram attempt ${i + 1} failed: ${String(error)}`);
+                this.logger.warn(`Telegram attempt ${i + 1} failed: ${this.redactToken(String(error))}`);
                 await new Promise((resolve) => setTimeout(resolve, 500 * (i + 1)));
             }
         }

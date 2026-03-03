@@ -1,4 +1,3 @@
-import { JwtService } from '@nestjs/jwt';
 import { Response } from 'express';
 import { VideosService } from './videos.service';
 import { UploadVideoDto } from './dto/upload-video.dto';
@@ -8,14 +7,14 @@ export declare class VideosController {
     private readonly videos;
     private readonly users;
     private readonly telegram;
-    private readonly jwt;
     private readonly logger;
-    constructor(videos: VideosService, users: UsersService, telegram: TelegramService, jwt: JwtService);
+    constructor(videos: VideosService, users: UsersService, telegram: TelegramService);
     private cacheKey;
     private cachePath;
     private getCachedFile;
     private ensureCached;
     private streamFromCache;
+    private enforceCacheSizeLimit;
     private warmCache;
     private removeCachedFile;
     private toClientVideo;
@@ -25,7 +24,9 @@ export declare class VideosController {
     private getDurationSeconds;
     private processVideo;
     private createGif;
-    list(query?: string, category?: string, page?: string, pageSize?: string): Promise<{
+    list(query?: string, category?: string, sort?: string, page?: string, pageSize?: string, user?: {
+        id: string;
+    } | null): Promise<{
         items: any[];
         total: number;
         page: number;
@@ -39,7 +40,21 @@ export declare class VideosController {
         pageSize: number;
         totalPages: number;
     }>;
-    get(id: string): Promise<any>;
+    get(id: string, user: {
+        id: string;
+    } | null): Promise<any>;
+    getLikeStatus(id: string, user: {
+        id: string;
+    } | null): Promise<{
+        liked: boolean;
+        likeCount: number;
+    }>;
+    toggleLike(id: string, user: {
+        id: string;
+    }): Promise<{
+        liked: boolean;
+        likeCount: number;
+    }>;
     upload(file: Express.Multer.File, dto: UploadVideoDto, user: {
         id: string;
     }): Promise<{
@@ -78,7 +93,13 @@ export declare class VideosController {
     remove(id: string): Promise<{
         id: string;
     }>;
-    stream(id: string, res: Response): Promise<void>;
-    preview(id: string, res: Response): Promise<void>;
+    stream(id: string, res: Response, user: {
+        id: string;
+        email: string;
+    } | null): Promise<void>;
+    preview(id: string, res: Response, user: {
+        id: string;
+        email: string;
+    } | null): Promise<void>;
     gif(id: string, res: Response): Promise<void>;
 }

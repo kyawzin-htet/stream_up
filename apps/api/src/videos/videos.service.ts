@@ -99,6 +99,7 @@ export class VideosService {
     query?: string;
     category?: string;
     premium?: boolean | null;
+    sort?: 'latest' | 'popular';
     page: number;
     pageSize: number;
   }) {
@@ -118,11 +119,16 @@ export class VideosService {
       where.OR = this.buildSearchFilter(params.query);
     }
 
+    const orderBy: any =
+      params.sort === 'popular'
+        ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }]
+        : [{ createdAt: 'desc' }];
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.video.findMany({
         where,
         include: { category: true, _count: { select: { likes: true } } },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
       }),

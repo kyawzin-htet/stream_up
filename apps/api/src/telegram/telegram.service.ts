@@ -15,6 +15,13 @@ export class TelegramService {
     private readonly users: UsersService,
   ) {}
 
+  /** Replace the bot token with [REDACTED] in any string before logging. */
+  private redactToken(message: string): string {
+    const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
+    if (!token) return message;
+    return message.split(token).join('[REDACTED]');
+  }
+
   private get botToken() {
     const token = this.config.get<string>('TELEGRAM_BOT_TOKEN');
     if (!token) throw new Error('Missing TELEGRAM_BOT_TOKEN');
@@ -289,10 +296,12 @@ export class TelegramService {
         return await fn();
       } catch (error) {
         lastError = error;
-        this.logger.warn(`Telegram attempt ${i + 1} failed: ${String(error)}`);
+        // Redact bot token before logging so it never appears in log output.
+        this.logger.warn(`Telegram attempt ${i + 1} failed: ${this.redactToken(String(error))}`);
         await new Promise((resolve) => setTimeout(resolve, 500 * (i + 1)));
       }
     }
     throw lastError;
   }
 }
+
