@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { API_URL } from '../../../../lib/api';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 export async function GET(req: Request) {
   const token = cookies().get('access_token')?.value;
