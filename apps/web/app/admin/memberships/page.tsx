@@ -9,7 +9,13 @@ import { AdminUpgradeRequestsPanel } from '../../../components/AdminUpgradeReque
 export default async function AdminMembershipsPage({
   searchParams,
 }: {
-  searchParams?: { query?: string; membership?: string; page?: string };
+  searchParams?: {
+    query?: string;
+    membership?: string;
+    page?: string;
+    upgradeStatus?: string;
+    upgradePage?: string;
+  };
 }) {
   const user = await getCurrentUser();
   if (!user?.isAdmin) redirect('/login');
