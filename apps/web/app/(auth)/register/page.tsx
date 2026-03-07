@@ -1,11 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useFormState } from 'react-dom';
+import { useFormState, useFormStatus } from 'react-dom';
 import { registerAction } from '../../../lib/auth';
 import { Toast } from '../../../components/Toast';
 
 const initialState = { error: null as string | null };
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="w-full rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900 disabled:opacity-60"
+    >
+      {pending ? 'Creating account...' : 'Create Account'}
+    </button>
+  );
+}
 
 export default function RegisterPage() {
   const [state, formAction] = useFormState(registerAction, initialState);
@@ -42,9 +56,7 @@ export default function RegisterPage() {
                 className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950/40 px-4 py-3 text-sm text-slate-100"
               />
             </div>
-            <button className="w-full rounded-full bg-emerald-400 px-6 py-3 text-sm font-semibold text-slate-900">
-              Create account
-            </button>
+            <SubmitButton />
           </form>
         </div>
       </div>

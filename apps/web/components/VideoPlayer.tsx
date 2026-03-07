@@ -30,7 +30,7 @@ export function VideoPlayer({
         <div className="bg-red-600 p-3 text-sm text-white">{error}</div>
       )}
       {loading && !error && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-950/50 text-sm text-slate-200">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-950/50 text-sm text-slate-200">
           Loading video... {loadingPercent}%
         </div>
       )}
@@ -58,6 +58,15 @@ export function VideoPlayer({
           setLoadingPercent(100);
           setLoading(false);
         }}
+        onCanPlayThrough={(event) => {
+          setLoadingPercent(100);
+          setLoading(false);
+        }}
+        onLoadedData={(event) => {
+          setLoadingPercent(getBufferedPercent(event.currentTarget));
+          setLoading(false);
+        }}
+        onPlay={() => setLoading(false)}
         onPlaying={() => setLoading(false)}
         onLoadedMetadata={(event) => {
           const target = event.currentTarget;
