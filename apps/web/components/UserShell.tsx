@@ -23,6 +23,11 @@ export function UserShell({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const query = searchParams.get('query') || '';
+  const isGalleryRoute = pathname.startsWith('/gallary');
+  const searchAction = isGalleryRoute ? '/gallary' : '/search';
+  const searchPlaceholder = isGalleryRoute
+    ? 'Search images by title or tag'
+    : 'Search movies, series, or keywords';
 
   const navItems = useMemo(
     () =>
@@ -95,12 +100,12 @@ export function UserShell({
                   StreamUp
                 </Link>
               </div>
-              <form action="/search" method="get" className="w-full sm:flex-1">
+              <form action={searchAction} method="get" className="w-full sm:flex-1">
                 <div className="relative">
                   <input
                     name="query"
                     defaultValue={query}
-                    placeholder="Search movies, series, or keywords"
+                    placeholder={searchPlaceholder}
                     className="w-full rounded-2xl border border-[#2f2f2f] bg-[#202020] px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400/60 focus:outline-none"
                   />
                 </div>

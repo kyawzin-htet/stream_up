@@ -16,14 +16,24 @@ export function AdminGalleryUploadForm({
 
     const form = event.currentTarget;
     const filesInput = form.elements.namedItem('files') as HTMLInputElement | null;
+    const titleInput = form.elements.namedItem('title') as HTMLInputElement | null;
+    const tagsInput = form.elements.namedItem('tags') as HTMLInputElement | null;
     const files = filesInput?.files;
+    const title = titleInput?.value.trim() || '';
+    const tags = tagsInput?.value.trim() || '';
     if (!files || files.length === 0) {
       setStatus('Please choose image files');
+      return;
+    }
+    if (!title && !tags) {
+      setStatus('Please enter a title or tags');
       return;
     }
 
     const isPremium = (form.elements.namedItem('isPremium') as HTMLSelectElement | null)?.value === 'true';
     const formData = new FormData();
+    if (title) formData.append('title', title);
+    if (tags) formData.append('tags', tags);
     Array.from(files).forEach((file) => formData.append('files', file));
 
     setIsUploading(true);
@@ -50,6 +60,27 @@ export function AdminGalleryUploadForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <label className="text-xs font-semibold uppercase text-slate-500">Title</label>
+        <input
+          name="title"
+          type="text"
+          placeholder="Summer street portraits"
+          className="w-full rounded-xl border border-[#2f2f2f] bg-[#202020] px-4 py-3 text-sm text-slate-100"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-xs font-semibold uppercase text-slate-500">Tags</label>
+        <input
+          name="tags"
+          type="text"
+          placeholder="portrait, travel, city"
+          className="w-full rounded-xl border border-[#2f2f2f] bg-[#202020] px-4 py-3 text-sm text-slate-100"
+        />
+        <p className="text-xs text-slate-500">Comma-separated tags. Enter a title or tags before upload.</p>
+      </div>
+
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase text-slate-500">Access</label>
         <select

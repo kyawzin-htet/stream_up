@@ -83,14 +83,23 @@ export type PricingPlansResponse = {
   plans: PricingPlan[];
 };
 
-export type GalleryImage = {
+export type GalleryImageAsset = {
   id: string;
-  telegramFileId: string;
-  telegramMessageId: string;
-  telegramChannelId: string;
+  createdAt: string;
+};
+
+export type GalleryImageGroup = {
+  id: string;
+  title: string;
+  tags: string[];
   isPremium: boolean;
   createdAt: string;
   uploaderId: string | null;
+  imageCount: number;
+  likeCount: number;
+  likedByMe: boolean;
+  coverImage: GalleryImageAsset | null;
+  images: GalleryImageAsset[];
 };
 
 export type MembershipUpgradeRequest = {

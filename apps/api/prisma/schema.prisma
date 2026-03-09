@@ -30,7 +30,9 @@ model User {
 
   telegramLinkTokens   TelegramLinkToken[]
   videos               Video[]          @relation("UserUploads")
+  galleryImageGroups   GalleryImageGroup[] @relation("UserGalleryGroupUploads")
   galleryImages        GalleryImage[]   @relation("UserGalleryUploads")
+  galleryImageLikes    GalleryImageLike[]
   deletedVideos        Video[]          @relation("VideoDeletedBy")
   likes                VideoLike[]
   favorites            VideoFavorite[]
@@ -194,6 +196,24 @@ model TelegramLinkToken {
   @@index([token])
 }
 
+model GalleryImageGroup {
+  id                String   @id @default(uuid())
+  title             String
+  tags              String[] @default([])
+  isPremium         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  uploaderId        String?
+  uploader          User?    @relation("UserGalleryGroupUploads", fields: [uploaderId], references: [id])
+
+  images            GalleryImage[]
+  likes             GalleryImageLike[]
+
+  @@index([createdAt])
+  @@index([isPremium])
+  @@index([title])
+}
+
 model GalleryImage {
   id                String   @id @default(uuid())
   telegramFileId    String
@@ -201,10 +221,27 @@ model GalleryImage {
   telegramChannelId String
   isPremium         Boolean  @default(false)
   createdAt         DateTime @default(now())
+  groupId           String
 
   uploaderId        String?
   uploader          User?    @relation("UserGalleryUploads", fields: [uploaderId], references: [id])
+  group             GalleryImageGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
   @@index([isPremium])
+  @@index([groupId])
+}
+
+model GalleryImageLike {
+  id        String   @id @default(uuid())
+  userId    String
+  groupId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     GalleryImageGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId])
+  @@index([userId])
 }

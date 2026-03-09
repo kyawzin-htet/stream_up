@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { apiFetch } from '../../../lib/api';
 import type { Comment, Paginated, Video } from '../../../lib/types';
 import { VideoPlayer } from '../../../components/VideoPlayer';
@@ -83,6 +84,14 @@ export default async function VideoDetailPage({ params }: { params: { id: string
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8">
+      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+        <Link href="/search" className="text-slate-300 transition hover:text-white">
+          Browse
+        </Link>
+        <span>/</span>
+        <span>{video.title}</span>
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-[1fr_0.8fr]">
         <div className="space-y-6">
           <VideoPlayer videoId={video.id} />
