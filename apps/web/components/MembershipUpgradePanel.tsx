@@ -57,7 +57,7 @@ export function MembershipUpgradePanel({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-6 text-sm">
+    <div className="rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6 text-sm">
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       <h3 className="text-base font-semibold text-slate-100">Upgrade to Premium</h3>
       <p className="mt-2 text-xs text-slate-400">
@@ -84,7 +84,7 @@ export function MembershipUpgradePanel({
                 className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
                   active
                     ? 'border-emerald-300 bg-emerald-400/10 text-emerald-200'
-                    : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                    : 'border-[#2f2f2f] text-slate-300 hover:border-slate-500'
                 }`}
               >
                 <div className="text-base font-semibold text-slate-100">{plan.name}</div>
@@ -101,7 +101,7 @@ export function MembershipUpgradePanel({
           type="file"
           accept="image/jpeg,image/png"
           onChange={(event) => setFile(event.target.files?.[0] || null)}
-          className="rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-100"
+          className="rounded-xl border border-[#2f2f2f] bg-[#222222] px-3 py-2 text-sm text-slate-100"
           required
         />
 
@@ -109,7 +109,7 @@ export function MembershipUpgradePanel({
         <textarea
           value={note}
           onChange={(event) => setNote(event.target.value)}
-          className="rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2 text-sm text-slate-100"
+          className="rounded-xl border border-[#2f2f2f] bg-[#222222] px-3 py-2 text-sm text-slate-100"
           rows={3}
         />
 
@@ -129,14 +129,14 @@ export function MembershipUpgradePanel({
             <p className="text-xs text-slate-500">No requests yet.</p>
           ) : (
             requests.map((request) => (
-              <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800/70 bg-slate-950/40 px-3 py-2">
+              <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#2f2f2f] bg-[#222222] px-3 py-2">
                 <div>
                   <p className="text-sm font-semibold text-slate-100">{request.planNameSnapshot}</p>
                   <p className="text-xs text-slate-500">
                     {request.currencySnapshot} {request.amountSnapshot}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-slate-300">
+                <span className="rounded-full bg-[#202020] px-3 py-1 text-xs font-semibold text-slate-300">
                   {request.status}
                 </span>
               </div>

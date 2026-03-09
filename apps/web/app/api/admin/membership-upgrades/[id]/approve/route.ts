@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../../lib/api';
 
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const token = cookies().get('access_token')?.value;
@@ -8,7 +8,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
 
   const res = await fetch(`${API_URL}/admin/membership-upgrades/${params.id}/approve`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: withApiLanguageHeaders({ Authorization: `Bearer ${token}` }),
   });
 
   if (!res.ok) {

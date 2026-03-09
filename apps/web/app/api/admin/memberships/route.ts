@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../lib/api';
 
 export async function POST(req: Request) {
   const token = cookies().get('access_token')?.value;
@@ -9,10 +9,10 @@ export async function POST(req: Request) {
   const payload = await req.json();
   const res = await fetch(`${API_URL}/admin/memberships/${payload.userId}`, {
     method: 'POST',
-    headers: {
+    headers: withApiLanguageHeaders({
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-    },
+    }),
     body: JSON.stringify({
       membershipType: payload.membershipType,
       membershipExpiresAt: payload.membershipExpiresAt,
@@ -29,7 +29,7 @@ export async function PUT() {
 
   const res = await fetch(`${API_URL}/admin/memberships/sync`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: withApiLanguageHeaders({ Authorization: `Bearer ${token}` }),
   });
 
   if (!res.ok) return new NextResponse(await res.text(), { status: res.status });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../lib/api';
 
 export const runtime = 'nodejs';
 
@@ -9,6 +9,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   const res = await fetch(`${API_URL}/videos/${params.id}/comments`, {
+    headers: withApiLanguageHeaders(),
     cache: 'no-store',
   });
 
@@ -30,10 +31,10 @@ export async function POST(
   const body = await req.text();
   const res = await fetch(`${API_URL}/videos/${params.id}/comments`, {
     method: 'POST',
-    headers: {
+    headers: withApiLanguageHeaders({
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-    },
+    }),
     body,
   });
 

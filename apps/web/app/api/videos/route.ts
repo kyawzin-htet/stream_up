@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../lib/api';
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const search = url.searchParams.toString();
   const token = cookies().get('access_token')?.value;
   const res = await fetch(`${API_URL}/videos${search ? `?${search}` : ''}`, {
-    headers: {
+    headers: withApiLanguageHeaders({
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    }),
     cache: token ? 'no-store' : 'force-cache',
     ...(token ? {} : { next: { revalidate: 10 } }),
   });

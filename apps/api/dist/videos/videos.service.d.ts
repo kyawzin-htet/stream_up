@@ -28,6 +28,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
@@ -57,6 +58,7 @@ export declare class VideosService {
             };
             _count: {
                 likes: number;
+                favorites: number;
             };
         } & {
             id: string;
@@ -64,6 +66,7 @@ export declare class VideosService {
             title: string;
             description: string;
             keywords: string[];
+            watchCount: number;
             telegramFileId: string;
             telegramMessageId: string;
             telegramChannelId: string;
@@ -90,6 +93,7 @@ export declare class VideosService {
         };
         _count: {
             likes: number;
+            favorites: number;
         };
     } & {
         id: string;
@@ -97,6 +101,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
@@ -118,6 +123,7 @@ export declare class VideosService {
         };
         _count: {
             likes: number;
+            favorites: number;
         };
     } & {
         id: string;
@@ -125,6 +131,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
@@ -151,6 +158,7 @@ export declare class VideosService {
             };
             _count: {
                 likes: number;
+                favorites: number;
             };
         } & {
             id: string;
@@ -158,6 +166,7 @@ export declare class VideosService {
             title: string;
             description: string;
             keywords: string[];
+            watchCount: number;
             telegramFileId: string;
             telegramMessageId: string;
             telegramChannelId: string;
@@ -184,6 +193,7 @@ export declare class VideosService {
         };
         _count: {
             likes: number;
+            favorites: number;
         };
     } & {
         id: string;
@@ -191,6 +201,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
@@ -212,6 +223,7 @@ export declare class VideosService {
         };
         _count: {
             likes: number;
+            favorites: number;
         };
     } & {
         id: string;
@@ -219,6 +231,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
@@ -240,6 +253,7 @@ export declare class VideosService {
         };
         _count: {
             likes: number;
+            favorites: number;
         };
     } & {
         id: string;
@@ -247,6 +261,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;
@@ -260,10 +275,57 @@ export declare class VideosService {
         uploaderId: string | null;
     }>;
     getLikedVideoIds(userId: string, videoIds: string[]): Promise<string[]>;
+    getFavoritedVideoIds(userId: string, videoIds: string[]): Promise<string[]>;
     isVideoLikedByUser(videoId: string, userId: string): Promise<boolean>;
+    isVideoFavoritedByUser(videoId: string, userId: string): Promise<boolean>;
     toggleLike(videoId: string, userId: string): Promise<{
         liked: boolean;
         likeCount: number;
+    }>;
+    toggleFavorite(videoId: string, userId: string): Promise<{
+        favorited: boolean;
+        favoriteCount: number;
+    }>;
+    incrementWatchCount(videoId: string): Promise<number>;
+    listFavoriteVideos(params: {
+        userId: string;
+        page: number;
+        pageSize: number;
+    }): Promise<{
+        items: ({
+            category: {
+                id: string;
+                createdAt: Date;
+                name: string;
+                slug: string;
+            };
+            _count: {
+                likes: number;
+                favorites: number;
+            };
+        } & {
+            id: string;
+            createdAt: Date;
+            title: string;
+            description: string;
+            keywords: string[];
+            watchCount: number;
+            telegramFileId: string;
+            telegramMessageId: string;
+            telegramChannelId: string;
+            telegramGifFileId: string | null;
+            telegramGifMessageId: string | null;
+            telegramGifChannelId: string | null;
+            isPremium: boolean;
+            deletedAt: Date | null;
+            categoryId: string;
+            deletedById: string | null;
+            uploaderId: string | null;
+        })[];
+        total: number;
+        page: number;
+        pageSize: number;
+        totalPages: number;
     }>;
     clearGifMetadata(videoId: string): Promise<{
         id: string;
@@ -271,6 +333,7 @@ export declare class VideosService {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;

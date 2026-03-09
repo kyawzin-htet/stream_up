@@ -21,6 +21,7 @@ export declare class VideosController {
     private shouldClearGifMetadata;
     private inferPreviewMimeType;
     private ensureViewerCanAccess;
+    private ensurePremiumMember;
     private getDurationSeconds;
     private processVideo;
     private createGif;
@@ -40,6 +41,15 @@ export declare class VideosController {
         pageSize: number;
         totalPages: number;
     }>;
+    listFavorites(page: string | undefined, pageSize: string | undefined, user: {
+        id: string;
+    }): Promise<{
+        items: any[];
+        total: number;
+        page: number;
+        pageSize: number;
+        totalPages: number;
+    }>;
     get(id: string, user: {
         id: string;
     } | null): Promise<any>;
@@ -49,11 +59,26 @@ export declare class VideosController {
         liked: boolean;
         likeCount: number;
     }>;
+    getFavoriteStatus(id: string, user: {
+        id: string;
+    } | null): Promise<{
+        favorited: boolean;
+        favoriteCount: number;
+    }>;
     toggleLike(id: string, user: {
         id: string;
     }): Promise<{
         liked: boolean;
         likeCount: number;
+    }>;
+    toggleFavorite(id: string, user: {
+        id: string;
+    }): Promise<{
+        favorited: boolean;
+        favoriteCount: number;
+    }>;
+    incrementWatch(id: string): Promise<{
+        watchCount: number;
     }>;
     upload(file: Express.Multer.File, dto: UploadVideoDto, user: {
         id: string;
@@ -70,6 +95,7 @@ export declare class VideosController {
         title: string;
         description: string;
         keywords: string[];
+        watchCount: number;
         telegramFileId: string;
         telegramMessageId: string;
         telegramChannelId: string;

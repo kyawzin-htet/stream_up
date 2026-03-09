@@ -24,7 +24,7 @@ export default async function AccountPage() {
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6">
       <div className={showUpgradePanel ? 'grid gap-6 lg:grid-cols-[0.8fr_1.2fr]' : 'grid gap-6'}>
-        <div className="space-y-4 rounded-2xl border border-slate-800/70 bg-slate-900/60 p-6 text-sm">
+        <div className="space-y-4 rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6 text-sm">
           <div>
             <p className="text-xs uppercase tracking-widest text-slate-500">Membership</p>
             <p className="mt-2 text-2xl font-semibold text-slate-100">{user.membershipType}</p>
@@ -35,7 +35,7 @@ export default async function AccountPage() {
             )}
           </div>
           <form action={logoutAction}>
-            <button className="w-full rounded-full border border-slate-700 px-6 py-3 text-xs font-semibold text-slate-100">
+            <button className="w-full rounded-full border border-[#2f2f2f] px-6 py-3 text-xs font-semibold text-slate-100">
               Sign out
             </button>
           </form>

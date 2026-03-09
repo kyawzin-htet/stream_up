@@ -19,6 +19,7 @@ const telegram_module_1 = require("./telegram/telegram.module");
 const prisma_module_1 = require("./prisma/prisma.module");
 const admin_module_1 = require("./admin/admin.module");
 const comments_module_1 = require("./comments/comments.module");
+const gallery_images_module_1 = require("./gallery-images/gallery-images.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -36,6 +37,7 @@ exports.AppModule = AppModule = __decorate([
             telegram_module_1.TelegramModule,
             admin_module_1.AdminModule,
             comments_module_1.CommentsModule,
+            gallery_images_module_1.GalleryImagesModule,
         ],
     })
 ], AppModule);

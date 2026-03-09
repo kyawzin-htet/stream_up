@@ -107,7 +107,7 @@ let VideosService = VideosService_1 = class VideosService {
         const [items, total] = await this.prisma.$transaction([
             this.prisma.video.findMany({
                 where,
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
                 orderBy,
                 skip: (params.page - 1) * params.pageSize,
                 take: params.pageSize,
@@ -126,7 +126,7 @@ let VideosService = VideosService_1 = class VideosService {
         try {
             const video = await this.prisma.video.findFirst({
                 where: { id, deletedAt: null },
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
             });
             if (!video)
                 throw new common_1.NotFoundException('Video not found');
@@ -141,9 +141,10 @@ let VideosService = VideosService_1 = class VideosService {
             });
             if (!base)
                 throw new common_1.NotFoundException('Video not found');
-            const [category, likeCount] = await Promise.all([
+            const [category, likeCount, favoriteCount] = await Promise.all([
                 this.prisma.category.findUnique({ where: { id: base.categoryId } }),
                 this.prisma.videoLike.count({ where: { videoId: base.id } }),
+                this.prisma.videoFavorite.count({ where: { videoId: base.id } }),
             ]);
             return {
                 ...base,
@@ -153,7 +154,7 @@ let VideosService = VideosService_1 = class VideosService {
                     slug: 'unknown',
                     createdAt: base.createdAt,
                 },
-                _count: { likes: likeCount },
+                _count: { likes: likeCount, favorites: favoriteCount },
             };
         }
     }
@@ -161,7 +162,7 @@ let VideosService = VideosService_1 = class VideosService {
         try {
             const video = await this.prisma.video.findUnique({
                 where: { id },
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
             });
             if (!video)
                 throw new common_1.NotFoundException('Video not found');
@@ -174,9 +175,10 @@ let VideosService = VideosService_1 = class VideosService {
             const base = await this.prisma.video.findUnique({ where: { id } });
             if (!base)
                 throw new common_1.NotFoundException('Video not found');
-            const [category, likeCount] = await Promise.all([
+            const [category, likeCount, favoriteCount] = await Promise.all([
                 this.prisma.category.findUnique({ where: { id: base.categoryId } }),
                 this.prisma.videoLike.count({ where: { videoId: base.id } }),
+                this.prisma.videoFavorite.count({ where: { videoId: base.id } }),
             ]);
             return {
                 ...base,
@@ -186,7 +188,7 @@ let VideosService = VideosService_1 = class VideosService {
                     slug: 'unknown',
                     createdAt: base.createdAt,
                 },
-                _count: { likes: likeCount },
+                _count: { likes: likeCount, favorites: favoriteCount },
             };
         }
     }
@@ -200,7 +202,7 @@ let VideosService = VideosService_1 = class VideosService {
         const [items, total] = await this.prisma.$transaction([
             this.prisma.video.findMany({
                 where,
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
                 orderBy: { deletedAt: 'desc' },
                 skip: (params.page - 1) * params.pageSize,
                 take: params.pageSize,
@@ -223,7 +225,7 @@ let VideosService = VideosService_1 = class VideosService {
                     deletedAt: new Date(),
                     deletedById: deletedById || null,
                 },
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
             });
         }
         catch (error) {
@@ -237,7 +239,7 @@ let VideosService = VideosService_1 = class VideosService {
             return await this.prisma.video.update({
                 where: { id },
                 data: { deletedAt: null, deletedById: null },
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
             });
         }
         catch (error) {
@@ -250,7 +252,7 @@ let VideosService = VideosService_1 = class VideosService {
         try {
             return await this.prisma.video.delete({
                 where: { id },
-                include: { category: true, _count: { select: { likes: true } } },
+                include: { category: true, _count: { select: { likes: true, favorites: true } } },
             });
         }
         catch (error) {
@@ -271,8 +273,32 @@ let VideosService = VideosService_1 = class VideosService {
         });
         return rows.map((row) => row.videoId);
     }
+    async getFavoritedVideoIds(userId, videoIds) {
+        if (!videoIds.length)
+            return [];
+        const rows = await this.prisma.videoFavorite.findMany({
+            where: {
+                userId,
+                videoId: { in: videoIds },
+            },
+            select: { videoId: true },
+        });
+        return rows.map((row) => row.videoId);
+    }
     async isVideoLikedByUser(videoId, userId) {
         const row = await this.prisma.videoLike.findUnique({
+            where: {
+                userId_videoId: {
+                    userId,
+                    videoId,
+                },
+            },
+            select: { id: true },
+        });
+        return Boolean(row);
+    }
+    async isVideoFavoritedByUser(videoId, userId) {
+        const row = await this.prisma.videoFavorite.findUnique({
             where: {
                 userId_videoId: {
                     userId,
@@ -326,6 +352,100 @@ let VideosService = VideosService_1 = class VideosService {
                 likeCount,
             };
         });
+    }
+    async toggleFavorite(videoId, userId) {
+        return this.prisma.$transaction(async (tx) => {
+            const video = await tx.video.findFirst({
+                where: { id: videoId, deletedAt: null },
+                select: { id: true },
+            });
+            if (!video)
+                throw new common_1.NotFoundException('Video not found');
+            const existing = await tx.videoFavorite.findUnique({
+                where: {
+                    userId_videoId: {
+                        userId,
+                        videoId,
+                    },
+                },
+                select: { id: true },
+            });
+            if (existing) {
+                await tx.videoFavorite.delete({
+                    where: {
+                        userId_videoId: {
+                            userId,
+                            videoId,
+                        },
+                    },
+                });
+            }
+            else {
+                await tx.videoFavorite.create({
+                    data: {
+                        userId,
+                        videoId,
+                    },
+                });
+            }
+            const favoriteCount = await tx.videoFavorite.count({
+                where: { videoId },
+            });
+            return {
+                favorited: !existing,
+                favoriteCount,
+            };
+        });
+    }
+    async incrementWatchCount(videoId) {
+        return this.prisma.$transaction(async (tx) => {
+            const video = await tx.video.findFirst({
+                where: { id: videoId, deletedAt: null },
+                select: { id: true },
+            });
+            if (!video)
+                throw new common_1.NotFoundException('Video not found');
+            const updated = await tx.video.update({
+                where: { id: videoId },
+                data: {
+                    watchCount: {
+                        increment: 1,
+                    },
+                },
+                select: { watchCount: true },
+            });
+            return updated.watchCount;
+        });
+    }
+    async listFavoriteVideos(params) {
+        const skip = (params.page - 1) * params.pageSize;
+        const where = {
+            userId: params.userId,
+            video: {
+                deletedAt: null,
+            },
+        };
+        const [rows, total] = await this.prisma.$transaction([
+            this.prisma.videoFavorite.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                skip,
+                take: params.pageSize,
+                include: {
+                    video: {
+                        include: { category: true, _count: { select: { likes: true, favorites: true } } },
+                    },
+                },
+            }),
+            this.prisma.videoFavorite.count({ where }),
+        ]);
+        return {
+            items: rows.map((row) => row.video),
+            total,
+            page: params.page,
+            pageSize: params.pageSize,
+            totalPages: Math.ceil(total / params.pageSize) || 1,
+        };
     }
     async clearGifMetadata(videoId) {
         try {

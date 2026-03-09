@@ -120,7 +120,7 @@ export function AdminTrashList({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search trashed videos"
-          className="w-full max-w-sm rounded-xl border border-slate-200 px-4 py-2 text-sm dark:border-slate-800 dark:bg-slate-900"
+          className="w-full max-w-sm rounded-xl border border-slate-200 px-4 py-2 text-sm dark:border-[#2f2f2f] dark:bg-[#222222]"
         />
         <button
           type="submit"
@@ -132,7 +132,7 @@ export function AdminTrashList({
       </form>
 
       {visibleItems.length === 0 ? (
-        <div className="mt-4 rounded-2xl border border-slate-800/70 bg-slate-900/40 p-6 text-sm text-slate-400">
+        <div className="mt-4 rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6 text-sm text-slate-400">
           Trash is empty.
         </div>
       ) : (
@@ -186,7 +186,7 @@ export function AdminTrashList({
 
       {confirmId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-800/80 bg-slate-900/90 p-6 text-slate-100 shadow-xl">
+          <div className="w-full max-w-sm rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6 text-slate-100 shadow-xl">
             <h3 className="text-lg font-semibold">Delete permanently?</h3>
             <p className="mt-2 text-sm text-slate-400">
               This will permanently delete the video and remove it from Telegram storage. This action cannot be undone.
@@ -195,7 +195,7 @@ export function AdminTrashList({
               <button
                 type="button"
                 onClick={() => setConfirmId(null)}
-                className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-200"
+                className="rounded-full border border-[#2f2f2f] px-4 py-2 text-xs font-semibold text-slate-200"
               >
                 Cancel
               </button>

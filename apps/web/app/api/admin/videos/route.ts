@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../lib/api';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -12,7 +12,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const search = url.searchParams.toString();
   const res = await fetch(`${API_URL}/videos/admin${search ? `?${search}` : ''}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: withApiLanguageHeaders({ Authorization: `Bearer ${token}` }),
     cache: 'no-store',
   });
 
@@ -32,11 +32,11 @@ export async function POST(req: Request) {
   const contentLength = req.headers.get('content-length') || '';
   const init: RequestInit & { duplex?: 'half' } = {
     method: 'POST',
-    headers: {
+    headers: withApiLanguageHeaders({
       Authorization: `Bearer ${token}`,
       ...(contentType ? { 'Content-Type': contentType } : {}),
       ...(contentLength ? { 'Content-Length': contentLength } : {}),
-    },
+    }),
     body: req.body,
     // Needed by Node fetch when forwarding request body streams.
     duplex: 'half',

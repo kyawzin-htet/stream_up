@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Logger,
   Param,
@@ -195,12 +196,15 @@ export class VideosController {
     await fs.unlink(filePath).catch(() => {});
   }
 
-  private toClientVideo(video: any, likedByMe = false) {
+  private toClientVideo(video: any, likedByMe = false, favoritedByMe = false) {
     const likeCount = Number(video?._count?.likes || 0);
+    const favoriteCount = Number(video?._count?.favorites || 0);
     return {
       ...video,
       likeCount,
+      favoriteCount,
       likedByMe,
+      favoritedByMe,
       _count: undefined,
       hasGif: Boolean(video.telegramGifFileId),
       telegramFileId: undefined,
@@ -255,6 +259,16 @@ export class VideosController {
       return false;
     }
     return true;
+  }
+
+  private async ensurePremiumMember(userId: string) {
+    const isAdmin = await this.users.isAdmin(userId);
+    if (isAdmin) return true;
+    const dbUser = await this.users.findById(userId);
+    return (
+      dbUser.membershipType === 'PREMIUM' &&
+      (!dbUser.membershipExpiresAt || dbUser.membershipExpiresAt.getTime() > Date.now())
+    );
   }
 
   private async getDurationSeconds(filePath: string) {
@@ -362,13 +376,19 @@ export class VideosController {
       page: Math.max(1, Number(page) || 1),
       pageSize: Math.min(50, Math.max(1, Number(pageSize) || 12)),
     });
-    const likedIds = user
-      ? new Set(await this.videos.getLikedVideoIds(user.id, data.items.map((video) => video.id)))
-      : new Set<string>();
+    const videoIds = data.items.map((video) => video.id);
+    const [likedIds, favoritedIds] = user
+      ? await Promise.all([
+          this.videos.getLikedVideoIds(user.id, videoIds).then((ids) => new Set(ids)),
+          this.videos.getFavoritedVideoIds(user.id, videoIds).then((ids) => new Set(ids)),
+        ])
+      : [new Set<string>(), new Set<string>()];
 
     return {
       ...data,
-      items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id))),
+      items: data.items.map((video) =>
+        this.toClientVideo(video, likedIds.has(video.id), favoritedIds.has(video.id)),
+      ),
     };
   }
 
@@ -411,6 +431,30 @@ export class VideosController {
     };
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get('favorites')
+  async listFavorites(
+    @Query('page') page = '1',
+    @Query('pageSize') pageSize = '12',
+    @CurrentUser() user: { id: string },
+  ) {
+    if (!(await this.ensurePremiumMember(user.id))) {
+      throw new ForbiddenException('Premium membership required');
+    }
+
+    const data = await this.videos.listFavoriteVideos({
+      userId: user.id,
+      page: Math.max(1, Number(page) || 1),
+      pageSize: Math.min(50, Math.max(1, Number(pageSize) || 12)),
+    });
+    const likedIds = new Set(await this.videos.getLikedVideoIds(user.id, data.items.map((video) => video.id)));
+
+    return {
+      ...data,
+      items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id), true)),
+    };
+  }
+
   @UseGuards(OptionalJwtAuthGuard)
   @Public()
   @Get(':id')
@@ -419,8 +463,13 @@ export class VideosController {
     @CurrentUser() user: { id: string } | null,
   ) {
     const video = await this.videos.getVideo(id);
-    const likedByMe = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
-    return this.toClientVideo(video, likedByMe);
+    const [likedByMe, favoritedByMe] = user
+      ? await Promise.all([
+          this.videos.isVideoLikedByUser(id, user.id),
+          this.videos.isVideoFavoritedByUser(id, user.id),
+        ])
+      : [false, false];
+    return this.toClientVideo(video, likedByMe, favoritedByMe);
   }
 
   @UseGuards(OptionalJwtAuthGuard)
@@ -436,6 +485,19 @@ export class VideosController {
     return { liked, likeCount };
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
+  @Public()
+  @Get(':id/favorite')
+  async getFavoriteStatus(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string } | null,
+  ) {
+    const video = await this.videos.getVideo(id);
+    const favoriteCount = Number(video?._count?.favorites || 0);
+    const favorited = user ? await this.videos.isVideoFavoritedByUser(id, user.id) : false;
+    return { favorited, favoriteCount };
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post(':id/like')
   async toggleLike(
@@ -443,6 +505,25 @@ export class VideosController {
     @CurrentUser() user: { id: string },
   ) {
     return this.videos.toggleLike(id, user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/favorite')
+  async toggleFavorite(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    if (!(await this.ensurePremiumMember(user.id))) {
+      throw new ForbiddenException('Premium membership required');
+    }
+    return this.videos.toggleFavorite(id, user.id);
+  }
+
+  @Public()
+  @Post(':id/watch')
+  async incrementWatch(@Param('id') id: string) {
+    const watchCount = await this.videos.incrementWatchCount(id);
+    return { watchCount };
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)

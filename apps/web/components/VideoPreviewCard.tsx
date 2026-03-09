@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Video } from '../lib/types';
+import { formatCompactCount } from '../lib/format';
 
 export function VideoPreviewCard({
   video,
@@ -53,13 +54,14 @@ export function VideoPreviewCard({
     return () => observer.disconnect();
   }, [allowPreview]);
 
-  const cardClassName = `group aspect-[3/4] w-full overflow-hidden rounded-2xl border border-slate-200/40 bg-transparent p-0 transition dark:border-slate-800/80 ${locked ? 'cursor-not-allowed opacity-90' : 'hover:-translate-y-0.5 hover:shadow-lg'} ${className ?? ''}`;
+  const cardClassName = `group aspect-[3/4] w-full overflow-hidden rounded-2xl border border-slate-200/40 bg-transparent p-0 transition dark:border-[#2f2f2f] ${locked ? 'cursor-not-allowed opacity-90' : 'hover:-translate-y-0.5 hover:shadow-lg'} ${className ?? ''}`;
   const canLoadGif = true;
   const showGif = hasGif && canLoadGif && shouldLoad && !gifExhausted;
   const showImagePreview = showGif && previewMode === 'image';
   const showVideoPreview = showGif && previewMode === 'video';
   const showFallbackText = hasGif && !locked && shouldLoad && gifExhausted;
   const likeCount = Number(video.likeCount || 0);
+  const watchCount = Number(video.watchCount || 0);
 
   const content = (
     <div
@@ -149,7 +151,7 @@ export function VideoPreviewCard({
         </div>
       )}
       {locked && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/40 text-xs font-semibold uppercase tracking-[0.2em] text-white">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-xs font-semibold uppercase tracking-[0.2em] text-white">
           Premium only
         </div>
       )}
@@ -157,9 +159,15 @@ export function VideoPreviewCard({
         <h3 className="text-sm font-semibold text-white">{video.title}</h3>
         <div className="mt-1 flex items-center justify-between text-[11px] text-slate-300">
           <span>{showDateTime ? new Date(video.createdAt).toLocaleString() : ''}</span>
-          <span className="inline-flex items-center gap-1 text-rose-200">
-            <span aria-hidden="true">♥</span>
-            <span>{likeCount}</span>
+          <span className="inline-flex items-center gap-3">
+            <span className="inline-flex items-center gap-1 text-slate-200">
+              <span aria-hidden="true">👁</span>
+              <span>{formatCompactCount(watchCount)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-rose-200">
+              <span aria-hidden="true">♥</span>
+              <span>{likeCount}</span>
+            </span>
           </span>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../lib/api';
 
 export async function PUT(req: Request) {
   const token = cookies().get('access_token')?.value;
@@ -9,10 +9,10 @@ export async function PUT(req: Request) {
   const body = await req.text();
   const res = await fetch(`${API_URL}/pricing/settings`, {
     method: 'PUT',
-    headers: {
+    headers: withApiLanguageHeaders({
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-    },
+    }),
     body,
   });
 

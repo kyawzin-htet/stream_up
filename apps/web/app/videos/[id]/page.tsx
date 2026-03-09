@@ -6,6 +6,8 @@ import { getAccessToken, getCurrentUser } from '../../../lib/auth';
 import { VideoPreviewCard } from '../../../components/VideoPreviewCard';
 import { CommentsSection } from '../../../components/CommentsSection';
 import { VideoLikeButton } from '../../../components/VideoLikeButton';
+import { VideoFavoriteButton } from '../../../components/VideoFavoriteButton';
+import { formatCompactCount } from '../../../lib/format';
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const video = await apiFetch<Video>(`/videos/${params.id}`);
@@ -16,16 +18,28 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 }
 
 export default async function VideoDetailPage({ params }: { params: { id: string } }) {
+  let watchedCount: number | null = null;
+  try {
+    const watched = await apiFetch<{ watchCount?: number }>(`/videos/${params.id}/watch`, {
+      method: 'POST',
+    });
+    if (typeof watched.watchCount === 'number') watchedCount = watched.watchCount;
+  } catch {
+    watchedCount = null;
+  }
+
   const [token, user] = await Promise.all([
     getAccessToken(),
     getCurrentUser(),
   ]);
   const video = await apiFetch<Video>(`/videos/${params.id}`, {}, token);
+  const watchCount = watchedCount ?? Number(video.watchCount || 0);
   const isAdmin = Boolean(user?.isAdmin);
   const hasPremium =
     user?.membershipType === 'PREMIUM' &&
     (!user.membershipExpiresAt || new Date(user.membershipExpiresAt).getTime() > Date.now());
   const canAccessPremium = isAdmin || hasPremium;
+  const canUseFavorites = isAdmin || hasPremium;
 
   const categorySlug = video.category?.slug || '';
   const keyword = video.keywords?.[0] || '';
@@ -73,32 +87,52 @@ export default async function VideoDetailPage({ params }: { params: { id: string
         <div className="space-y-6">
           <VideoPlayer videoId={video.id} />
           {isAdmin ? (
-            <div className="rounded-2xl border border-slate-800/70 bg-slate-900/60 p-6">
+            <div className="rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6">
               <h1 className="text-2xl font-semibold text-slate-100">{video.title}</h1>
               <p className="mt-3 text-sm text-slate-400">{video.description}</p>
               <div className="mt-4 flex flex-wrap items-center gap-3 text-xs">
                 <span className="badge">{video.isPremium ? 'Premium' : 'Free'}</span>
                 <span className="text-slate-500">Category: {video.category?.name}</span>
               </div>
-              <div className="mt-4">
+              <div className="mt-4 flex flex-wrap items-start gap-3">
                 <VideoLikeButton
                   videoId={video.id}
                   initialCount={video.likeCount || 0}
                   initialLiked={Boolean(video.likedByMe)}
                   isAuthenticated={Boolean(user)}
                 />
+                <VideoFavoriteButton
+                  videoId={video.id}
+                  initialFavorited={Boolean(video.favoritedByMe)}
+                  isAuthenticated={Boolean(user)}
+                  canFavorite={canUseFavorites}
+                />
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#202020] px-4 py-2 text-xs font-semibold text-slate-200">
+                  <span aria-hidden="true">👁</span>
+                  <span>{formatCompactCount(watchCount)}</span>
+                </span>
               </div>
             </div>
           ) : (
             <div>
               <h1 className="text-2xl font-semibold text-slate-100">{video.title}</h1>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-start gap-3">
                 <VideoLikeButton
                   videoId={video.id}
                   initialCount={video.likeCount || 0}
                   initialLiked={Boolean(video.likedByMe)}
                   isAuthenticated={Boolean(user)}
                 />
+                <VideoFavoriteButton
+                  videoId={video.id}
+                  initialFavorited={Boolean(video.favoritedByMe)}
+                  isAuthenticated={Boolean(user)}
+                  canFavorite={canUseFavorites}
+                />
+                <span className="inline-flex items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#202020] px-4 py-2 text-xs font-semibold text-slate-200">
+                  <span aria-hidden="true">👁</span>
+                  <span>{formatCompactCount(watchCount)}</span>
+                </span>
               </div>
             </div>
           )}

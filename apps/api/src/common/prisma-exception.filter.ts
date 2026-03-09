@@ -5,8 +5,9 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
+import { localizeMessage, resolveLanguage } from './i18n';
 
 @Catch(Prisma.PrismaClientKnownRequestError, Prisma.PrismaClientInitializationError)
 export class PrismaExceptionFilter implements ExceptionFilter {
@@ -17,7 +18,9 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     host: ArgumentsHost,
   ) {
     const ctx = host.switchToHttp();
+    const req = ctx.getRequest<Request>();
     const res = ctx.getResponse<Response>();
+    const language = resolveLanguage(req);
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Database request failed';
@@ -52,7 +55,7 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     if (res.headersSent) return;
     res.status(status).json({
       statusCode: status,
-      message,
+      message: localizeMessage(message, language),
       ...(prismaCode ? { prismaCode } : {}),
     });
   }

@@ -91,7 +91,7 @@ export function AdminPricingPanel({
       </div>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="grid grid-cols-[1.2fr_0.8fr_0.6fr_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-900/70">
+        <div className="grid grid-cols-[1.2fr_0.8fr_0.6fr_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-[#202020]">
           <div>Plan</div>
           <div>Amount</div>
           <div>Status</div>

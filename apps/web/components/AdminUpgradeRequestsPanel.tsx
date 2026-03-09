@@ -73,7 +73,7 @@ export function AdminUpgradeRequestsPanel({
         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-700">
           Approved totals
         </summary>
-        <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-900/70">
+        <div className="grid grid-cols-[1.5fr_0.8fr_0.8fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-[#202020]">
           <div>Plan</div>
           <div>Approved count</div>
           <div>Total amount</div>
@@ -96,7 +96,7 @@ export function AdminUpgradeRequestsPanel({
       </details>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="grid grid-cols-[1.6fr_1fr_0.7fr_0.7fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-900/70">
+        <div className="grid grid-cols-[1.6fr_1fr_0.7fr_0.7fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-[#202020]">
           <div>Member</div>
           <div>Plan</div>
           <div>Status</div>

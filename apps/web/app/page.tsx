@@ -20,7 +20,7 @@ export default async function HomePage() {
   return (
     <div className="space-y-8 sm:space-y-10">
       {!user && (
-        <section className="rounded-3xl border border-slate-800/70 bg-slate-900/40 p-5 sm:p-6 lg:p-8">
+        <section className="rounded-3xl border border-[#2f2f2f] bg-[#202020] p-5 sm:p-6 lg:p-8">
           <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8">
             <div>
               <p className="text-xs uppercase tracking-[0.4em] text-slate-500">StreamUp library</p>
@@ -36,7 +36,7 @@ export default async function HomePage() {
                 </Link>
                 <Link
                   href="/register"
-                  className="rounded-full border border-slate-700 px-5 py-2 text-xs font-semibold text-slate-100"
+                  className="rounded-full border border-[#2f2f2f] px-5 py-2 text-xs font-semibold text-slate-100"
                 >
                   Create Account
                 </Link>

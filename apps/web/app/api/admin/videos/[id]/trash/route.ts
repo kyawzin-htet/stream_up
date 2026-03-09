@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../../lib/api';
 
 export const runtime = 'nodejs';
 
@@ -13,7 +13,7 @@ export async function PATCH(
 
   const res = await fetch(`${API_URL}/videos/${params.id}/trash`, {
     method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: withApiLanguageHeaders({ Authorization: `Bearer ${token}` }),
   });
 
   if (!res.ok) {

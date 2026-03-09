@@ -26,8 +26,11 @@ export type Video = {
   categoryId: string;
   isPremium: boolean;
   hasGif: boolean;
+  watchCount: number;
   likeCount: number;
   likedByMe: boolean;
+  favoriteCount: number;
+  favoritedByMe: boolean;
   createdAt: string;
 };
 
@@ -78,6 +81,16 @@ export type PricingPlan = {
 export type PricingPlansResponse = {
   currency: string;
   plans: PricingPlan[];
+};
+
+export type GalleryImage = {
+  id: string;
+  telegramFileId: string;
+  telegramMessageId: string;
+  telegramChannelId: string;
+  isPremium: boolean;
+  createdAt: string;
+  uploaderId: string | null;
 };
 
 export type MembershipUpgradeRequest = {

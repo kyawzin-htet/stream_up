@@ -10,6 +10,7 @@ import { TelegramModule } from './telegram/telegram.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { AdminModule } from './admin/admin.module';
 import { CommentsModule } from './comments/comments.module';
+import { GalleryImagesModule } from './gallery-images/gallery-images.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { CommentsModule } from './comments/comments.module';
     TelegramModule,
     AdminModule,
     CommentsModule,
+    GalleryImagesModule,
   ],
 })
 export class AppModule {}

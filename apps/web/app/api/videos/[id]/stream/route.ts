@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../lib/api';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -12,10 +12,10 @@ export async function GET(
   const token = cookies().get('access_token')?.value;
   const range = req.headers.get('range');
   const res = await fetch(`${API_URL}/videos/${params.id}/stream`, {
-    headers: {
+    headers: withApiLanguageHeaders({
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(range ? { Range: range } : {}),
-    },
+    }),
   });
 
   const headers = new Headers();

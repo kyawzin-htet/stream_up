@@ -181,7 +181,7 @@ export function AdminUploadForm({ categories }: { categories: Category[] }) {
                 step={1}
                 value={trimStart}
                 onChange={(event) => setTrimStart(Number(event.target.value))}
-                className="mt-2 w-full rounded-xl border border-amber-400/30 bg-slate-950/40 px-3 py-2 text-xs text-amber-100"
+                className="mt-2 w-full rounded-xl border border-amber-400/30 bg-[#222222] px-3 py-2 text-xs text-amber-100"
               />
             </div>
             <div>
@@ -193,7 +193,7 @@ export function AdminUploadForm({ categories }: { categories: Category[] }) {
                 step={1}
                 value={trimEnd ?? MAX_DURATION_SEC}
                 onChange={(event) => setTrimEnd(Number(event.target.value))}
-                className="mt-2 w-full rounded-xl border border-amber-400/30 bg-slate-950/40 px-3 py-2 text-xs text-amber-100"
+                className="mt-2 w-full rounded-xl border border-amber-400/30 bg-[#222222] px-3 py-2 text-xs text-amber-100"
               />
             </div>
           </div>
@@ -223,7 +223,7 @@ export function AdminUploadForm({ categories }: { categories: Category[] }) {
             <span>Upload progress</span>
             <span>{uploadPercent}%</span>
           </div>
-          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-900/60">
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#202020]">
             <div
               className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-200"
               style={{ width: `${uploadPercent}%` }}

@@ -81,7 +81,7 @@ export function BrowseVideoGrid({
   return (
     <div className="space-y-4">
       {visibleItems.length === 0 ? (
-        <div className="rounded-2xl border border-slate-800/70 bg-slate-900/40 p-6 text-sm text-slate-400">
+        <div className="rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6 text-sm text-slate-400">
           No videos found.
         </div>
       ) : (

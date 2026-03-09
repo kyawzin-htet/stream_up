@@ -114,8 +114,8 @@ export default async function AdminMembershipsPage({
             </button>
           </form>
 
-          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-            <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-900/70 dark:text-slate-300">
+          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 dark:border-[#2f2f2f]">
+            <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-[#202020] dark:text-slate-300">
               <div>Email</div>
               <div>Telegram ID</div>
               <div>Membership</div>

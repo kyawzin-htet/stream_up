@@ -66,7 +66,7 @@ export function CommentsSection({
   }
 
   return (
-    <section className="space-y-4 rounded-2xl border border-slate-800/70 bg-slate-900/60 p-6">
+    <section className="space-y-4 rounded-2xl border border-[#2f2f2f] bg-[#202020] p-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold text-slate-100">Comments</h2>
         <span className="text-xs text-slate-400">{comments.length}</span>
@@ -90,7 +90,7 @@ export function CommentsSection({
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder="Share your thoughts..."
-            className="w-full rounded-2xl border border-slate-800/70 bg-slate-950/40 px-4 py-3 text-sm text-slate-100"
+            className="w-full rounded-2xl border border-[#2f2f2f] bg-[#222222] px-4 py-3 text-sm text-slate-100"
           />
           <div className="flex items-center justify-between">
             <span className="text-xs text-slate-500">{status || ''}</span>
@@ -110,7 +110,7 @@ export function CommentsSection({
           <p className="text-sm text-slate-500">No comments yet.</p>
         )}
         {comments.map((comment) => (
-          <div key={comment.id} className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4">
+          <div key={comment.id} className="rounded-2xl border border-[#2f2f2f] bg-[#222222] p-4">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-100">{comment.user?.email}</p>
               <span className="text-xs text-slate-500">
@@ -137,7 +137,7 @@ export function CommentsSection({
                   value={replyBody}
                   onChange={(event) => setReplyBody(event.target.value)}
                   placeholder="Write a reply..."
-                  className="w-full rounded-2xl border border-slate-800/70 bg-slate-950/40 px-4 py-2 text-sm text-slate-100"
+                  className="w-full rounded-2xl border border-[#2f2f2f] bg-[#222222] px-4 py-2 text-sm text-slate-100"
                 />
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-500">{status || ''}</span>
@@ -153,7 +153,7 @@ export function CommentsSection({
             )}
 
             {comment.replies && comment.replies.length > 0 && (
-              <div className="mt-4 space-y-3 border-l border-slate-800/70 pl-4">
+              <div className="mt-4 space-y-3 border-l border-[#2f2f2f] pl-4">
                 {comment.replies.map((reply) => (
                   <div key={reply.id} className="space-y-1">
                     <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../lib/api';
 
 export async function POST() {
   const token = cookies().get('access_token')?.value;
@@ -8,7 +8,7 @@ export async function POST() {
 
   const res = await fetch(`${API_URL}/auth/telegram-link`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: withApiLanguageHeaders({ Authorization: `Bearer ${token}` }),
   });
 
   if (!res.ok) return new NextResponse(await res.text(), { status: res.status });

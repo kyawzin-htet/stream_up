@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { PrismaExceptionFilter } from './common/prisma-exception.filter';
 import { UsersService } from './users/users.service';
+import { LocalizedHttpExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
   // Do NOT pass { cors: true } here — that would open to all origins before enableCors() runs.
@@ -42,7 +43,7 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  app.useGlobalFilters(new LocalizedHttpExceptionFilter(), new PrismaExceptionFilter());
 
   const port = Number(process.env.PORT || 3001);
   await app.listen(port);

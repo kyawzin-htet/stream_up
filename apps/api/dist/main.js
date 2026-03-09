@@ -8,6 +8,7 @@ const app_module_1 = require("./app.module");
 const config_1 = require("@nestjs/config");
 const prisma_exception_filter_1 = require("./common/prisma-exception.filter");
 const users_service_1 = require("./users/users.service");
+const http_exception_filter_1 = require("./common/http-exception.filter");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     const config = app.get(config_1.ConfigService);
@@ -33,7 +34,7 @@ async function bootstrap() {
         forbidNonWhitelisted: true,
         transform: true,
     }));
-    app.useGlobalFilters(new prisma_exception_filter_1.PrismaExceptionFilter());
+    app.useGlobalFilters(new http_exception_filter_1.LocalizedHttpExceptionFilter(), new prisma_exception_filter_1.PrismaExceptionFilter());
     const port = Number(process.env.PORT || 3001);
     await app.listen(port);
     const usersService = app.get(users_service_1.UsersService);

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../lib/api';
 
 export const runtime = 'nodejs';
 
@@ -14,10 +14,10 @@ export async function POST(
   const body = await req.text();
   const res = await fetch(`${API_URL}/comments/${params.id}/replies`, {
     method: 'POST',
-    headers: {
+    headers: withApiLanguageHeaders({
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
-    },
+    }),
     body,
   });
 

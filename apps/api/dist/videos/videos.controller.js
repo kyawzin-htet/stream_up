@@ -170,12 +170,15 @@ let VideosController = VideosController_1 = class VideosController {
         CACHE_INFLIGHT.delete(fileId);
         await fs_2.promises.unlink(filePath).catch(() => { });
     }
-    toClientVideo(video, likedByMe = false) {
+    toClientVideo(video, likedByMe = false, favoritedByMe = false) {
         const likeCount = Number(video?._count?.likes || 0);
+        const favoriteCount = Number(video?._count?.favorites || 0);
         return {
             ...video,
             likeCount,
+            favoriteCount,
             likedByMe,
+            favoritedByMe,
             _count: undefined,
             hasGif: Boolean(video.telegramGifFileId),
             telegramFileId: undefined,
@@ -220,6 +223,14 @@ let VideosController = VideosController_1 = class VideosController {
             return false;
         }
         return true;
+    }
+    async ensurePremiumMember(userId) {
+        const isAdmin = await this.users.isAdmin(userId);
+        if (isAdmin)
+            return true;
+        const dbUser = await this.users.findById(userId);
+        return (dbUser.membershipType === 'PREMIUM' &&
+            (!dbUser.membershipExpiresAt || dbUser.membershipExpiresAt.getTime() > Date.now()));
     }
     async getDurationSeconds(filePath) {
         const { stdout } = await execFileAsync('ffprobe', [
@@ -277,12 +288,16 @@ let VideosController = VideosController_1 = class VideosController {
             page: Math.max(1, Number(page) || 1),
             pageSize: Math.min(50, Math.max(1, Number(pageSize) || 12)),
         });
-        const likedIds = user
-            ? new Set(await this.videos.getLikedVideoIds(user.id, data.items.map((video) => video.id)))
-            : new Set();
+        const videoIds = data.items.map((video) => video.id);
+        const [likedIds, favoritedIds] = user
+            ? await Promise.all([
+                this.videos.getLikedVideoIds(user.id, videoIds).then((ids) => new Set(ids)),
+                this.videos.getFavoritedVideoIds(user.id, videoIds).then((ids) => new Set(ids)),
+            ])
+            : [new Set(), new Set()];
         return {
             ...data,
-            items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id))),
+            items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id), favoritedIds.has(video.id))),
         };
     }
     async adminList(status = 'active', query, premium, page = '1', pageSize = '20') {
@@ -311,10 +326,30 @@ let VideosController = VideosController_1 = class VideosController {
             items: data.items.map((video) => this.toClientVideo(video)),
         };
     }
+    async listFavorites(page = '1', pageSize = '12', user) {
+        if (!(await this.ensurePremiumMember(user.id))) {
+            throw new common_1.ForbiddenException('Premium membership required');
+        }
+        const data = await this.videos.listFavoriteVideos({
+            userId: user.id,
+            page: Math.max(1, Number(page) || 1),
+            pageSize: Math.min(50, Math.max(1, Number(pageSize) || 12)),
+        });
+        const likedIds = new Set(await this.videos.getLikedVideoIds(user.id, data.items.map((video) => video.id)));
+        return {
+            ...data,
+            items: data.items.map((video) => this.toClientVideo(video, likedIds.has(video.id), true)),
+        };
+    }
     async get(id, user) {
         const video = await this.videos.getVideo(id);
-        const likedByMe = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
-        return this.toClientVideo(video, likedByMe);
+        const [likedByMe, favoritedByMe] = user
+            ? await Promise.all([
+                this.videos.isVideoLikedByUser(id, user.id),
+                this.videos.isVideoFavoritedByUser(id, user.id),
+            ])
+            : [false, false];
+        return this.toClientVideo(video, likedByMe, favoritedByMe);
     }
     async getLikeStatus(id, user) {
         const video = await this.videos.getVideo(id);
@@ -322,8 +357,24 @@ let VideosController = VideosController_1 = class VideosController {
         const liked = user ? await this.videos.isVideoLikedByUser(id, user.id) : false;
         return { liked, likeCount };
     }
+    async getFavoriteStatus(id, user) {
+        const video = await this.videos.getVideo(id);
+        const favoriteCount = Number(video?._count?.favorites || 0);
+        const favorited = user ? await this.videos.isVideoFavoritedByUser(id, user.id) : false;
+        return { favorited, favoriteCount };
+    }
     async toggleLike(id, user) {
         return this.videos.toggleLike(id, user.id);
+    }
+    async toggleFavorite(id, user) {
+        if (!(await this.ensurePremiumMember(user.id))) {
+            throw new common_1.ForbiddenException('Premium membership required');
+        }
+        return this.videos.toggleFavorite(id, user.id);
+    }
+    async incrementWatch(id) {
+        const watchCount = await this.videos.incrementWatchCount(id);
+        return { watchCount };
     }
     async upload(file, dto, user) {
         if (!file?.path)
@@ -672,6 +723,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "adminList", null);
 __decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)('favorites'),
+    __param(0, (0, common_1.Query)('page')),
+    __param(1, (0, common_1.Query)('pageSize')),
+    __param(2, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, Object]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "listFavorites", null);
+__decorate([
     (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)(':id'),
@@ -692,6 +753,16 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "getLikeStatus", null);
 __decorate([
+    (0, common_1.UseGuards)(optional_jwt_auth_guard_1.OptionalJwtAuthGuard),
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Get)(':id/favorite'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "getFavoriteStatus", null);
+__decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Post)(':id/like'),
     __param(0, (0, common_1.Param)('id')),
@@ -700,6 +771,23 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], VideosController.prototype, "toggleLike", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Post)(':id/favorite'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "toggleFavorite", null);
+__decorate([
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Post)(':id/watch'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], VideosController.prototype, "incrementWatch", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard, admin_guard_1.AdminGuard),
     (0, common_1.Post)(),

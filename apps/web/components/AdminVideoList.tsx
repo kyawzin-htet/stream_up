@@ -36,8 +36,8 @@ export function AdminVideoList({ initial }: { initial: Paginated<Video> }) {
         <span className="text-xs text-slate-500">{items.length} items</span>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-        <div className="grid grid-cols-[2fr_1fr_0.6fr_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-900/70">
+      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200 dark:border-[#2f2f2f]">
+        <div className="grid grid-cols-[2fr_1fr_0.6fr_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-[#202020]">
           <div>Title</div>
           <div>Category</div>
           <div>Access</div>

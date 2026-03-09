@@ -10,13 +10,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PrismaExceptionFilter = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
+const i18n_1 = require("./i18n");
 let PrismaExceptionFilter = PrismaExceptionFilter_1 = class PrismaExceptionFilter {
     constructor() {
         this.logger = new common_1.Logger(PrismaExceptionFilter_1.name);
     }
     catch(exception, host) {
         const ctx = host.switchToHttp();
+        const req = ctx.getRequest();
         const res = ctx.getResponse();
+        const language = (0, i18n_1.resolveLanguage)(req);
         let status = common_1.HttpStatus.INTERNAL_SERVER_ERROR;
         let message = 'Database request failed';
         let prismaCode;
@@ -49,7 +52,7 @@ let PrismaExceptionFilter = PrismaExceptionFilter_1 = class PrismaExceptionFilte
             return;
         res.status(status).json({
             statusCode: status,
-            message,
+            message: (0, i18n_1.localizeMessage)(message, language),
             ...(prismaCode ? { prismaCode } : {}),
         });
     }

@@ -50,7 +50,7 @@ export function VideoLikeButton({
         className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition ${
           liked
             ? 'border-rose-300/60 bg-rose-400/15 text-rose-200'
-            : 'border-slate-700 bg-slate-900/60 text-slate-200'
+            : 'border-[#2f2f2f] bg-[#202020] text-slate-200'
         } disabled:opacity-60`}
       >
         <span aria-hidden="true">{liked ? '♥' : '♡'}</span>

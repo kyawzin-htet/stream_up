@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { API_URL } from '../../../../../lib/api';
+import { API_URL, withApiLanguageHeaders } from '../../../../../lib/api';
 
 export const runtime = 'nodejs';
 
@@ -10,9 +10,9 @@ export async function GET(
 ) {
   const token = cookies().get('access_token')?.value;
   const res = await fetch(`${API_URL}/videos/${params.id}/like`, {
-    headers: {
+    headers: withApiLanguageHeaders({
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    }),
     cache: 'no-store',
   });
 
@@ -32,9 +32,9 @@ export async function POST(
 
   const res = await fetch(`${API_URL}/videos/${params.id}/like`, {
     method: 'POST',
-    headers: {
+    headers: withApiLanguageHeaders({
       Authorization: `Bearer ${token}`,
-    },
+    }),
   });
 
   if (!res.ok) {

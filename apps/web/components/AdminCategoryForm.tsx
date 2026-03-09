@@ -74,8 +74,8 @@ export function AdminCategoryForm({ initial }: { initial: Category[] }) {
             Create
           </button>
         </div>
-      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800">
-        <div className="grid grid-cols-[1.5fr_1fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-slate-900/70 dark:text-slate-300">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 dark:border-[#2f2f2f]">
+        <div className="grid grid-cols-[1.5fr_1fr] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500 dark:bg-[#202020] dark:text-slate-300">
           <div>Name</div>
           <div>Slug</div>
         </div>
@@ -94,7 +94,7 @@ export function AdminCategoryForm({ initial }: { initial: Category[] }) {
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lift dark:border dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-lift dark:border dark:border-[#2f2f2f] dark:bg-[#202020] dark:text-slate-100">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Create category</h3>
               <button
@@ -110,13 +110,13 @@ export function AdminCategoryForm({ initial }: { initial: Category[] }) {
               <input
                 name="name"
                 placeholder="Category name"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-[#2f2f2f] dark:bg-[#222222]"
                 required
               />
               <input
                 name="slug"
                 placeholder="slug"
-                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-slate-700 dark:bg-slate-950"
+                className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm dark:border-[#2f2f2f] dark:bg-[#222222]"
                 required
               />
               {status && <p className="text-sm text-slate-600">{status}</p>}
@@ -124,7 +124,7 @@ export function AdminCategoryForm({ initial }: { initial: Category[] }) {
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-200"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 dark:border-[#2f2f2f] dark:text-slate-200"
                 >
                   Cancel
                 </button>
