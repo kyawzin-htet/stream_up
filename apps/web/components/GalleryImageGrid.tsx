@@ -27,7 +27,6 @@ export function GalleryImageGrid({
   deletingIds?: Set<string>;
 }) {
   const [items, setItems] = useState<GalleryImageGroup[]>(initial.items);
-  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
   const [page, setPage] = useState(initial.page);
   const [totalPages, setTotalPages] = useState(initial.totalPages);
   const [loading, setLoading] = useState(false);
@@ -40,21 +39,6 @@ export function GalleryImageGrid({
     setTotalPages(initial.totalPages);
     setError(null);
   }, [initial.items, initial.page, initial.totalPages, query]);
-
-  function handleImageLoad(groupId: string, event: React.SyntheticEvent<HTMLImageElement>) {
-    const target = event.currentTarget;
-    const width = Math.max(1, Math.round(target.naturalWidth / 6));
-    const height = Math.max(1, Math.round(target.naturalHeight / 6));
-
-    setSizes((prev) => {
-      const current = prev[groupId];
-      if (current?.width === width && current?.height === height) return prev;
-      return {
-        ...prev,
-        [groupId]: { width, height },
-      };
-    });
-  }
 
   useEffect(() => {
     const target = sentinelRef.current;
@@ -108,18 +92,17 @@ export function GalleryImageGrid({
           No image groups found.
         </div>
       ) : (
-        <div className="flex flex-wrap items-start gap-4">
+        <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4 2xl:columns-5">
           {items.map((group) => {
             const locked = group.isPremium && !canAccessPremium;
             const isSelected = selectableIds?.has(group.id) || false;
             const isDeleting = deletingIds?.has(group.id) || false;
-            const size = sizes[group.id];
             const detailHref = `${detailBasePath}/${group.id}`;
             return (
               <article
                 key={group.id}
-                className="relative overflow-hidden rounded-lg border border-[#2f2f2f] bg-[#181818] shadow-[0_18px_40px_rgba(0,0,0,0.24)] max-w-full"
-                style={size ? { width: `${size.width}px` } : undefined}
+                className="relative mb-4 inline-block w-full overflow-hidden rounded-lg border border-[#2f2f2f] bg-[#181818] shadow-[0_18px_40px_rgba(0,0,0,0.24)]"
+                style={{ breakInside: 'avoid', WebkitColumnBreakInside: 'avoid', pageBreakInside: 'avoid' }}
               >
                 <Link href={detailHref} className="block">
                   <div className="relative overflow-hidden bg-[#202020]">
@@ -128,8 +111,7 @@ export function GalleryImageGrid({
                         src={`/api/gallery-images/${group.coverImage.id}/file`}
                         alt={group.title}
                         loading="lazy"
-                        onLoad={(event) => handleImageLoad(group.id, event)}
-                        className={`block h-auto max-w-full transition duration-300 ${locked ? 'scale-105 blur-md' : 'hover:scale-[1.03]'}`}
+                        className={`block h-auto w-full transition duration-300 ${locked ? 'scale-105 blur-md' : 'hover:scale-[1.03]'}`}
                       />
                     ) : (
                       <div className="flex min-h-40 items-center justify-center text-sm text-slate-500">
