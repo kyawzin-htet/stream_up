@@ -103,20 +103,26 @@ export function AdminShell({
                   </form>
                 </div>
               </div>
-              <div className="hidden lg:flex lg:justify-end">
-                <LanguageSwitch language={language} />
-              </div>
-              {showHeader && (
-                <form action="/search" method="get" className="flex-1">
-                  <div className="relative">
-                    <input
-                      name="query"
-                      defaultValue={query}
-                      placeholder="Search videos, members, or categories"
-                      className="w-full rounded-2xl border border-[#2f2f2f] bg-[#202020] px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400/60 focus:outline-none"
-                    />
+              {showHeader ? (
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                  <form action="/search" method="get" className="flex-1">
+                    <div className="relative">
+                      <input
+                        name="query"
+                        defaultValue={query}
+                        placeholder="Search videos, members, or categories"
+                        className="w-full rounded-2xl border border-[#2f2f2f] bg-[#202020] px-4 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-400/60 focus:outline-none"
+                      />
+                    </div>
+                  </form>
+                  <div className="hidden lg:flex">
+                    <LanguageSwitch language={language} />
                   </div>
-                </form>
+                </div>
+              ) : (
+                <div className="hidden lg:flex lg:justify-end">
+                  <LanguageSwitch language={language} />
+                </div>
               )}
             </div>
           </header>

@@ -14,8 +14,8 @@ export function GalleryDetailImageList({
 
   function handleLoad(imageId: string, event: React.SyntheticEvent<HTMLImageElement>) {
     const target = event.currentTarget;
-    const width = Math.max(1, Math.round(target.naturalWidth / 6));
-    const height = Math.max(1, Math.round(target.naturalHeight / 6));
+    const width = Math.max(1, Math.round(target.naturalWidth / 4));
+    const height = Math.max(1, Math.round(target.naturalHeight / 4));
 
     setSizes((prev) => {
       const current = prev[imageId];

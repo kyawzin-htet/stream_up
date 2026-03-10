@@ -128,9 +128,11 @@ export function GalleryImageGrid({
 
                 <div className="pointer-events-none absolute inset-x-3 top-3 flex items-start justify-between gap-3">
                   <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-black/55 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
-                      {group.imageCount}
-                    </span>
+                    {group.imageCount > 1 && (
+                      <span className="rounded-full bg-black/55 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+                        {group.imageCount}
+                      </span>
+                    )}
                     {group.isPremium && (
                       <span className="rounded-full border border-amber-400/40 bg-amber-400/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-200">
                         Premium
