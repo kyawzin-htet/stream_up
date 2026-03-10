@@ -102,7 +102,7 @@ export function GalleryImageGrid({
               <article
                 key={group.id}
                 className="relative mb-4 inline-block w-full overflow-hidden rounded-lg border border-[#2f2f2f] bg-[#181818] shadow-[0_18px_40px_rgba(0,0,0,0.24)]"
-                style={{ breakInside: 'avoid', WebkitColumnBreakInside: 'avoid', pageBreakInside: 'avoid' }}
+                style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}
               >
                 <Link href={detailHref} className="block">
                   <div className="relative overflow-hidden bg-[#202020]">
