@@ -20,7 +20,12 @@ async function main() {
   }
 
   const adminEmail = getAdminEmail();
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'admin12345';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    throw new Error('SEED_ADMIN_PASSWORD is not set');
+  }
+
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   const prisma = new PrismaClient({

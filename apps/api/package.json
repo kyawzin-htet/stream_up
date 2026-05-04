@@ -4,8 +4,11 @@
   "private": true,
   "description": "NestJS backend for StreamUp",
   "scripts": {
+    "postinstall": "prisma generate",
+    "prebuild": "prisma generate",
     "build": "nest build",
     "start": "node dist/main.js",
+    "prestart:dev": "prisma generate",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\"",

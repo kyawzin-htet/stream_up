@@ -70,40 +70,13 @@ Membership flow:
 
 ### API (`apps/api/.env` for local API dev)
 
-```bash
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/stream_up
-JWT_SECRET=change-me
-JWT_EXPIRES_IN=7d
-APP_URL=http://localhost:3001
-WEB_URL=http://localhost:3000
-ADMIN_EMAILS=admin@example.com
-
-TELEGRAM_BOT_TOKEN=<bot_token>
-TELEGRAM_BOT_USERNAME=<bot_username_without_@>
-TELEGRAM_CHANNEL_ID=-100xxxxxxxxxx
-TELEGRAM_GROUP_ID=-100yyyyyyyyyy
-TELEGRAM_WEBHOOK_SECRET=<optional_secret>
-
-UPLOAD_MAX_MB=1024
-UPLOAD_SOFT_MAX_MB=500
-UPLOAD_MAX_DURATION_SEC=900
-UPLOAD_GIF_DEFAULT_DURATION_SEC=6
-UPLOAD_GIF_MAX_DURATION_SEC=12
-UPLOAD_INBOX_DIR=/tmp/streamup-upload-inbox
-VIDEO_CACHE_DIR=/tmp/streamup-video-cache
-VIDEO_CACHE_TTL_MS=21600000
-
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX=2000
-RATE_LIMIT_DISABLED=false
-PORT=3001
-```
+````
 
 ### Web (`apps/web/.env.local`)
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:3001
-```
+````
 
 ### Root `.env` (used by `docker compose` for API service)
 
